@@ -53,6 +53,7 @@ export type ProgressStage =
   | "installing_fabric"
   | "downloading_mods"
   | "deploying_configs"
+  | "downloading_optional"
   | "verifying";
 
 /** Stage display labels */
@@ -64,6 +65,7 @@ export const STAGE_LABELS: Record<ProgressStage, string> = {
   installing_fabric: "Instalando Fabric Loader...",
   downloading_mods: "Descargando mods...",
   deploying_configs: "Aplicando configuración...",
+  downloading_optional: "Descargando recurso opcional...",
   verifying: "Verificando integridad...",
 };
 
@@ -79,6 +81,8 @@ export interface PackManifest {
   configs: ConfigEntry[];
   resourcePacks: ResourcePackEntry[];
   shaderPacks: ShaderPackEntry[];
+  optionalResourcePacks?: OptionalPackEntry[];
+  optionalShaderPacks?: OptionalPackEntry[];
   protectedPaths: string[];
   server: ServerConfig;
   java: JavaConfig;
@@ -115,6 +119,16 @@ export interface ShaderPackEntry {
   url: string;
   sha1: string;
   enabled: boolean;
+}
+
+export interface OptionalPackEntry {
+  id: string;
+  name: string;
+  description: string;
+  filename: string;
+  url: string;
+  sha1: string;
+  size: number;
 }
 
 export interface ServerConfig {

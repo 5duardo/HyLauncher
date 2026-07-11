@@ -23,10 +23,25 @@ pub struct PackManifest {
     pub resource_packs: Vec<ResourcePackEntry>,
     #[serde(rename = "shaderPacks", default)]
     pub shader_packs: Vec<ShaderPackEntry>,
+    #[serde(rename = "optionalResourcePacks", default)]
+    pub optional_resource_packs: Vec<OptionalPackEntry>,
+    #[serde(rename = "optionalShaderPacks", default)]
+    pub optional_shader_packs: Vec<OptionalPackEntry>,
     #[serde(rename = "protectedPaths", default)]
     pub protected_paths: Vec<String>,
     pub server: ServerConfig,
     pub java: Option<JavaConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptionalPackEntry {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub filename: String,
+    pub url: String,
+    pub sha1: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

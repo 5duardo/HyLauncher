@@ -151,3 +151,22 @@ export function onError(
 ): Promise<UnlistenFn> {
   return listen<string>("launcher_error", (e) => callback(e.payload));
 }
+
+// ---- Optional Components (Shaders & Texture Packs) ----
+
+export async function checkOptionalFile(folderType: string, filename: string): Promise<boolean> {
+  return invoke("check_optional_file", { folderType, filename });
+}
+
+export async function downloadOptionalFile(
+  url: string,
+  folderType: string,
+  filename: string,
+  sha1: string
+): Promise<void> {
+  return invoke("download_optional_file", { url, folderType, filename, sha1 });
+}
+
+export async function deleteOptionalFile(folderType: string, filename: string): Promise<void> {
+  return invoke("delete_optional_file", { folderType, filename });
+}

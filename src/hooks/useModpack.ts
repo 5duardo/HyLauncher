@@ -45,26 +45,37 @@ export function useModpack() {
 
   const checkForUpdates = useCallback(async () => {
     setState((s) => ({ ...s, isChecking: true, error: null }));
+    
+    // 1. Try to load local manifest first so we have it immediately
+    let manifest = null;
     try {
-      const [diff, manifest] = await Promise.all([
-        cmd.checkForUpdates(),
-        cmd.getLocalManifest(),
-      ]);
-      setState((s) => ({
-        ...s,
-        updateDiff: diff,
-        manifest,
-        isChecking: false,
-      }));
-      return diff;
-    } catch (err) {
-      setState((s) => ({
-        ...s,
-        error: String(err),
-        isChecking: false,
-      }));
-      return null;
+      manifest = await cmd.getLocalManifest();
+    } catch (e) {
+      console.error("Failed to load local manifest:", e);
     }
+
+    // 2. Check for updates from the remote server
+    let diff = null;
+    let updateError = null;
+    try {
+      diff = await cmd.checkForUpdates();
+      // Fetch manifest again from the backend's memory cache that checkForUpdates populated
+      manifest = await cmd.getLocalManifest();
+    } catch (e) {
+      console.error("Failed to check for updates:", e);
+      updateError = String(e);
+    }
+
+    // 3. Update state with whatever was resolved
+    setState((s) => ({
+      ...s,
+      updateDiff: diff,
+      manifest: manifest || s.manifest,
+      isChecking: false,
+      error: updateError,
+    }));
+
+    return diff;
   }, []);
 
   const executeUpdate = useCallback(async () => {

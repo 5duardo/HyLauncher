@@ -42,6 +42,87 @@
       "size": 721366,
       "required": true,
       "side": "client"
+    },
+    {
+      "id": "iris",
+      "filename": "iris-1.7.6+mc1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/YL57xq9U/versions/s5eFLITc/iris-1.7.6%2Bmc1.20.1.jar",
+      "sha1": "880c0b9ce38bb4997645793407c1801df83f4233",
+      "size": 2726899,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "indium",
+      "filename": "indium-1.0.36+mc1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/Orvt0mRa/versions/nQHYSjxO/indium-1.0.36%2Bmc1.20.1.jar",
+      "sha1": "d824614e7a173d273167969f427702f51846aca7",
+      "size": 105382,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "clumps",
+      "filename": "Clumps-fabric-1.20.1-12.0.0.4.jar",
+      "url": "https://cdn.modrinth.com/data/Wnxd13zP/versions/hefSwtn6/Clumps-fabric-1.20.1-12.0.0.4.jar",
+      "sha1": "a20cfe0b0ee0b897887f81c4919af9d220ba22e7",
+      "size": 21987,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "appleskin",
+      "filename": "appleskin-fabric-mc1.20.1-2.5.2.jar",
+      "url": "https://cdn.modrinth.com/data/EsAfCjCV/versions/N5XeV21r/appleskin-fabric-mc1.20.1-2.5.2.jar",
+      "sha1": "f859bb13130788ae2dc2e76a9c80c89e4bbbef5f",
+      "size": 1097240,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "reeses-sodium-options",
+      "filename": "reeses_sodium_options-1.7.2+mc1.20.1-build.101.jar",
+      "url": "https://cdn.modrinth.com/data/Bh37bMuy/versions/Rc9pkPug/reeses_sodium_options-1.7.2%2Bmc1.20.1-build.101.jar",
+      "sha1": "206f1b01b99ac3df99ddd84ed96b466a8700412d",
+      "size": 259465,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "sodium-extra",
+      "filename": "sodium-extra-0.5.4c+mc1.20.1-build.115.jar",
+      "url": "https://cdn.modrinth.com/data/On5sfs4t/versions/3W33d5dF/sodium-extra-0.5.4c%2Bmc1.20.1-build.115.jar",
+      "sha1": "3dbfbd28c8de1516e8abcb51f8a3d13bfde6b567",
+      "size": 198210,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "ferrite-core",
+      "filename": "ferritecore-6.0.1-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/uXXizFOH/versions/A125dD7/ferritecore-6.0.1-fabric.jar",
+      "sha1": "6d3abfdbe6a7828de3e47ab7d9834ba12e76d36e",
+      "size": 90214,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "krypton",
+      "filename": "krypton-0.2.3.jar",
+      "url": "https://cdn.modrinth.com/data/hEOCd68v/versions/f3f3F/krypton-0.2.3.jar",
+      "sha1": "dbbde6a7bde6b3d567adbe3db12fbe7d12f6b567",
+      "size": 45012,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "lazy-dfu",
+      "filename": "lazydfu-0.1.3.jar",
+      "url": "https://cdn.modrinth.com/data/hvq5FdOk/versions/1.0/lazydfu-0.1.3.jar",
+      "sha1": "ffdbde68e1a78b3d567adbe3d22bcf1f7df2b567",
+      "size": 18204,
+      "required": true,
+      "side": "client"
     }
   ],
 
@@ -72,10 +153,34 @@
 
   "server": {
     "name": "HyServer",
-    "address": "tu-dominio-o-ip.com",
+    "address": "jugar.hyserver.com",
     "port": 25565,
     "autoConnect": true
   },
+
+  "optionalResourcePacks": [
+    {
+      "id": "faithful-64x",
+      "name": "Faithful 64x",
+      "description": "El pack de texturas clásico de Minecraft en resolución 64x64",
+      "filename": "Faithful-64x-Beta-9.zip",
+      "url": "https://cdn.modrinth.com/data/r4GILswZ/versions/YOjutORB/Faithful%2064x%20-%20Beta%209.zip",
+      "sha1": "",
+      "size": 52684200
+    }
+  ],
+
+  "optionalShaderPacks": [
+    {
+      "id": "complementary-reimagined",
+      "name": "Complementary Reimagined",
+      "description": "Shaders espectaculares con agua realista, iluminación de color avanzada y rendimiento excelente",
+      "filename": "ComplementaryReimagined_r5.8.1.zip",
+      "url": "https://cdn.modrinth.com/data/HVnmMxH1/versions/yCCduG44/ComplementaryReimagined_r5.8.1.zip",
+      "sha1": "5a021081f0178ed91dd911194071465ab0a4348b",
+      "size": 546925
+    }
+  ],
 
   "java": {
     "version": 17

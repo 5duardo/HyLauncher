@@ -246,6 +246,8 @@ async fn check_for_updates(
                 configs: vec![],
                 resource_packs: vec![],
                 shader_packs: vec![],
+                optional_resource_packs: vec![],
+                optional_shader_packs: vec![],
                 protected_paths: vec![],
                 server: modpack::manifest::ServerConfig {
                     name: "HyServer".to_string(),
@@ -638,6 +640,83 @@ async fn ensure_fabric_profile(
 }
 
 // ============================================================
+// Tauri Commands — Shaders and Resource Packs
+// ============================================================
+
+#[tauri::command]
+async fn check_optional_file(folder_type: String, filename: String) -> Result<bool, LauncherError> {
+    let dir = match folder_type.as_str() {
+        "resourcepack" => paths::resourcepacks_dir(),
+        "shaderpack" => paths::shaderpacks_dir(),
+        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
+    };
+    Ok(dir.join(filename).exists())
+}
+
+#[tauri::command]
+async fn download_optional_file(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    url: String,
+    folder_type: String,
+    filename: String,
+    sha1: String,
+) -> Result<(), LauncherError> {
+    let dir = match folder_type.as_str() {
+        "resourcepack" => paths::resourcepacks_dir(),
+        "shaderpack" => paths::shaderpacks_dir(),
+        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
+    };
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(&filename);
+
+    let _ = app.emit("progress", serde_json::json!({
+        "stage": "downloading_optional",
+        "current": 0,
+        "total": 1,
+        "detail": filename.clone()
+    }));
+
+    let expected_sha1 = if sha1 == "REPLACE_WITH_ACTUAL_SHA1" || sha1.is_empty() {
+        None
+    } else {
+        Some(sha1.as_str())
+    };
+
+    http::download_file_with_retry(
+        &state.http_client,
+        &url,
+        &dest,
+        expected_sha1,
+        3,
+    )
+    .await?;
+
+    let _ = app.emit("progress", serde_json::json!({
+        "stage": "verifying",
+        "current": 1,
+        "total": 1,
+        "detail": format!("{} instalado ✓", filename)
+    }));
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_optional_file(folder_type: String, filename: String) -> Result<(), LauncherError> {
+    let dir = match folder_type.as_str() {
+        "resourcepack" => paths::resourcepacks_dir(),
+        "shaderpack" => paths::shaderpacks_dir(),
+        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
+    };
+    let path = dir.join(filename);
+    if path.exists() {
+        std::fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+// ============================================================
 // Plugin Registration
 // ============================================================
 
@@ -694,6 +773,10 @@ pub fn run() {
             // Window
             minimize_window,
             close_window,
+            // Optional components
+            check_optional_file,
+            download_optional_file,
+            delete_optional_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running HyLauncher");

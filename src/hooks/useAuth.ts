@@ -160,6 +160,12 @@ export function useAuth() {
     setState((s) => ({ ...s, error: null }));
   }, []);
 
+  const logout = useCallback(async () => {
+    if (state.activeAccount) {
+      await removeAccount(state.activeAccount.id);
+    }
+  }, [state.activeAccount, removeAccount]);
+
   return {
     ...state,
     loginOffline,
@@ -167,6 +173,7 @@ export function useAuth() {
     cancelMicrosoftLogin,
     removeAccount,
     selectAccount,
+    logout,
     clearError,
     reload: loadAccounts,
   };

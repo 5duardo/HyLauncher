@@ -78,16 +78,11 @@ export function useLaunch() {
       // 3. Check modpack updates
       setLauncherState("checking");
       const diff = await cmd.checkForUpdates();
-      if (diff) {
-        setLauncherState("downloading");
-        await cmd.executeUpdate();
+      if (diff && diff.modsToDownload.length > 0) {
+        setLauncherState("needs_update");
+      } else {
+        setLauncherState("ready");
       }
-
-      // 4. Verify
-      setLauncherState("verifying");
-      // Backend handles verification during executeUpdate
-
-      setLauncherState("ready");
     } catch (err) {
       setError(String(err));
       setLauncherState("error");

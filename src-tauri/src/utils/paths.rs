@@ -85,10 +85,6 @@ pub fn natives_dir() -> PathBuf {
     instance_dir().join("natives")
 }
 
-/// Java executable path
-pub fn java_executable() -> PathBuf {
-    java_dir().join("jre-17").join("bin").join("javaw.exe")
-}
 
 /// Ensure all required directories exist
 pub fn ensure_dirs() -> std::io::Result<()> {
