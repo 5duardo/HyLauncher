@@ -1,0 +1,74 @@
+// ============================================================
+// HyLauncher — OfflineLogin Component
+// ============================================================
+
+import { useState } from "react";
+
+interface OfflineLoginProps {
+  onSubmit: (username: string) => void;
+  isLoading: boolean;
+}
+
+export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
+  const [username, setUsername] = useState("");
+
+  const isValid =
+    username.length >= 3 &&
+    username.length <= 16 &&
+    /^[a-zA-Z0-9_]+$/.test(username);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isValid && !isLoading) {
+      onSubmit(username);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="input-group">
+        <label htmlFor="offline-username">Nombre de usuario</label>
+        <input
+          id="offline-username"
+          type="text"
+          className="input-field"
+          placeholder="Steve"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          maxLength={16}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="input-hint">
+          3–16 caracteres. Solo letras, números y guion bajo.
+          {username.length > 0 && !isValid && (
+            <span style={{ color: "var(--color-error)", marginLeft: "8px" }}>
+              Nombre inválido
+            </span>
+          )}
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        className="btn btn--primary btn--full"
+        disabled={!isValid || isLoading}
+        style={{ marginTop: "16px" }}
+      >
+        {isLoading ? (
+          <>
+            <span className="spinner" /> Guardando...
+          </>
+        ) : (
+          <>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" />
+            </svg>
+            Entrar como Offline
+          </>
+        )}
+      </button>
+    </form>
+  );
+}

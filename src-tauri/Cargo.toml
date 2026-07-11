@@ -1,0 +1,60 @@
+[package]
+name = "hylauncher"
+version = "1.0.0"
+description = "Custom Minecraft launcher for HyServer"
+authors = ["HyLauncher"]
+edition = "2021"
+
+[lib]
+name = "hylauncher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri core
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-http = "2"
+tauri-plugin-process = "2"
+tauri-plugin-shell = "2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Cryptography (SHA1, MD5 for UUID)
+sha1 = "0.10"
+md-5 = "0.10"
+uuid = { version = "1", features = ["v3"] }
+
+# File handling
+zip = "2"
+tempfile = "3"
+walkdir = "2"
+dirs = "6"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# NBT for servers.dat
+fastnbt = "2"
+
+# Futures / async utilities
+futures = "0.3"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

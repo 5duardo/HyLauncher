@@ -1,0 +1,83 @@
+{
+  "packVersion": "1.0.0",
+  "packName": "HyPack",
+  "packDescription": "Modpack oficial del servidor HyServer — rendimiento + QoL",
+  "minecraft": "1.20.1",
+  "fabricLoader": "0.19.3",
+  "baseUrl": "https://github.com/YOUR_USER/hypack/releases/download/v1.0.0",
+
+  "mods": [
+    {
+      "id": "fabric-api",
+      "filename": "fabric-api-0.92.9+1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/P7dR8mSH/versions/hu6gukgT/fabric-api-0.92.9%2B1.20.1.jar",
+      "sha1": "89c79de1c8e17f3d34fded3a2fe401e7e60a707d",
+      "size": 2111565,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "sodium",
+      "filename": "sodium-fabric-0.5.13+mc1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/AANobbMI/versions/OihdIimA/sodium-fabric-0.5.13%2Bmc1.20.1.jar",
+      "sha1": "bcdbf37d9494e405cba210d7a80ed58e756297b5",
+      "size": 971552,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "lithium",
+      "filename": "lithium-fabric-mc1.20.1-0.11.4.jar",
+      "url": "https://cdn.modrinth.com/data/gvQqBUqZ/versions/iEcXOkz4/lithium-fabric-mc1.20.1-0.11.4.jar",
+      "sha1": "048227ed60a3005cf9fa55880dfe0cf20b0ba680",
+      "size": 691483,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "modmenu",
+      "filename": "modmenu-7.2.2.jar",
+      "url": "https://cdn.modrinth.com/data/mOgUt4GM/versions/lEkperf6/modmenu-7.2.2.jar",
+      "sha1": "099c68feeb74887cbbbd8ce9a27c6123804a2c5a",
+      "size": 721366,
+      "required": true,
+      "side": "client"
+    }
+  ],
+
+  "configs": [
+    {
+      "path": "options.txt",
+      "url": "{baseUrl}/configs/options.txt",
+      "sha1": "REPLACE_WITH_ACTUAL_SHA1",
+      "overwritePolicy": "always"
+    },
+    {
+      "path": "servers.dat",
+      "url": "{baseUrl}/configs/servers.dat",
+      "sha1": "REPLACE_WITH_ACTUAL_SHA1",
+      "overwritePolicy": "always"
+    }
+  ],
+
+  "resourcePacks": [],
+  "shaderPacks": [],
+
+  "protectedPaths": [
+    "screenshots/",
+    "saves/",
+    "logs/",
+    "crash-reports/"
+  ],
+
+  "server": {
+    "name": "HyServer",
+    "address": "tu-dominio-o-ip.com",
+    "port": 25565,
+    "autoConnect": true
+  },
+
+  "java": {
+    "version": 17
+  }
+}
