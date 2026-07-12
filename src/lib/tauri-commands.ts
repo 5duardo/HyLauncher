@@ -73,6 +73,13 @@ export async function executeUpdate(): Promise<void> {
   return invoke("execute_update");
 }
 
+export async function reinstallMods(): Promise<{
+  reinstalled: number;
+  totalDownloadSize: number;
+}> {
+  return invoke("reinstall_mods");
+}
+
 /** Fetch Modrinth icon URLs for a list of mods */
 export async function getModIcons(
   mods: { id: string; url: string }[]

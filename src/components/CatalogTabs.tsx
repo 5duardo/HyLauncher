@@ -3,7 +3,7 @@
 // ============================================================
 
 import type { ReactNode } from "react";
-import { FaCheck, FaDownload, FaSearch } from "react-icons/fa";
+import { FaCheck, FaDownload, FaRedo, FaSearch } from "react-icons/fa";
 import { ModIcon } from "./ModIcon";
 import { ProgressBar } from "./ProgressBar";
 import { ViewModeToggle, type CatalogViewMode } from "./ViewModeToggle";
@@ -27,6 +27,7 @@ interface CatalogTabsProps {
   progressLabel: string;
   progressPercent: number;
   onInstallMods: () => void;
+  onReinstallMods: () => void;
   // textures
   filteredResourcePacks: OptionalPackEntry[];
   textureIcons: Record<string, string>;
@@ -57,6 +58,7 @@ export function CatalogTabs(props: CatalogTabsProps) {
     progressLabel,
     progressPercent,
     onInstallMods,
+    onReinstallMods,
     filteredResourcePacks,
     textureIcons,
     installedTextures,
@@ -91,6 +93,16 @@ export function CatalogTabs(props: CatalogTabsProps) {
             />
           </div>
           {viewToggle}
+          <button
+            type="button"
+            className="btn btn--ghost btn--bar"
+            onClick={onReinstallMods}
+            disabled={isUpdating || filteredMods.length === 0}
+            title={t("mods.reinstall")}
+          >
+            {isUpdating ? <span className="spinner" /> : <FaRedo size={13} />}
+            <span>{t("mods.reinstall")}</span>
+          </button>
           {updateDiff && updateDiff.modsToDownload.length > 0 ? (
             <button
               className="btn btn--primary btn--bar"

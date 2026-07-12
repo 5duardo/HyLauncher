@@ -99,6 +99,29 @@ export function useModpack() {
     }
   }, []);
 
+  const reinstallMods = useCallback(async () => {
+    setState((s) => ({ ...s, isUpdating: true, error: null, progress: null }));
+    try {
+      await cmd.reinstallMods();
+      const manifest = await cmd.getLocalManifest();
+      const diff = await cmd.checkForUpdates();
+      setState((s) => ({
+        ...s,
+        manifest,
+        updateDiff: diff,
+        isUpdating: false,
+        progress: null,
+      }));
+    } catch (err) {
+      setState((s) => ({
+        ...s,
+        error: String(err),
+        isUpdating: false,
+      }));
+      throw err;
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     setState((s) => ({ ...s, error: null }));
   }, []);
@@ -113,6 +136,7 @@ export function useModpack() {
     progressPercent,
     checkForUpdates,
     executeUpdate,
+    reinstallMods,
     clearError,
   };
 }

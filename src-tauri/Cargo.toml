@@ -1,6 +1,6 @@
 [package]
 name = "hylauncher"
-version = "1.0.3"
+version = "1.0.4"
 description = "Custom Minecraft launcher for HyServer"
 authors = ["HyLauncher"]
 edition = "2021"

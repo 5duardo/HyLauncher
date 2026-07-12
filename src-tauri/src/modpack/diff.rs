@@ -329,3 +329,34 @@ impl UpdateDiff {
         self.is_empty() && self.update_kind == UpdateKind::Manifest
     }
 }
+
+/// Force re-download of every client/both-side mod from the manifest.
+pub fn force_reinstall_mods_diff(manifest: &PackManifest) -> UpdateDiff {
+    let mut mods_to_download = Vec::new();
+    let mut total_download_size: u64 = 0;
+    let mut mods_to_delete = Vec::new();
+
+    let mods_dir = paths::mods_dir();
+    for remote_mod in &manifest.mods {
+        if remote_mod.side == "server" {
+            continue;
+        }
+        let path = mods_dir.join(&remote_mod.filename);
+        if path.exists() {
+            mods_to_delete.push(path.display().to_string());
+        }
+        total_download_size += remote_mod.size;
+        mods_to_download.push(remote_mod.clone());
+    }
+
+    UpdateDiff {
+        mods_to_download,
+        mods_to_delete,
+        configs_to_update: Vec::new(),
+        resource_packs_to_update: Vec::new(),
+        shader_packs_to_update: Vec::new(),
+        total_download_size,
+        is_full_install: true,
+        update_kind: UpdateKind::Content,
+    }
+}

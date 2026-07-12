@@ -230,6 +230,19 @@ export default function App() {
     }
   };
 
+  const handleReinstallMods = async () => {
+    if (!window.confirm(t("mods.reinstallConfirm"))) return;
+    launch.setLauncherState("downloading");
+    modpack.clearError();
+    try {
+      await modpack.reinstallMods();
+      launch.setLauncherState("ready");
+    } catch (e) {
+      console.error(e);
+      launch.setLauncherState("needs_update");
+    }
+  };
+
   return !splashDone ? (
     <SplashScreen onComplete={() => setSplashDone(true)} />
   ) : (
@@ -439,6 +452,7 @@ export default function App() {
               progressLabel={modpack.progressLabel}
               progressPercent={modpack.progressPercent}
               onInstallMods={handleInstallMods}
+              onReinstallMods={handleReinstallMods}
               filteredResourcePacks={filteredResourcePacks}
               textureIcons={textureIcons}
               installedTextures={installedTextures}

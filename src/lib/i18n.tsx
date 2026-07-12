@@ -68,6 +68,10 @@ const es: Dict = {
   "mods.installing": "Instalando... ({percent}%)",
   "mods.installCount": "Instalar Mods ({count})",
   "mods.upToDate": "Mods al día",
+  "mods.reinstall": "Reinstalar",
+  "mods.reinstallConfirm":
+    "Se borrarán y volverán a descargar todos los mods del pack. ¿Continuar?",
+  "mods.reinstalling": "Reinstalando... ({percent}%)",
   "mods.col.mod": "Mod",
   "mods.col.file": "Archivo",
   "mods.col.size": "Tamaño",
@@ -337,6 +341,10 @@ const en: Dict = {
   "mods.installing": "Installing... ({percent}%)",
   "mods.installCount": "Install Mods ({count})",
   "mods.upToDate": "Mods up to date",
+  "mods.reinstall": "Reinstall",
+  "mods.reinstallConfirm":
+    "All pack mods will be deleted and downloaded again. Continue?",
+  "mods.reinstalling": "Reinstalling... ({percent}%)",
   "mods.col.mod": "Mod",
   "mods.col.file": "File",
   "mods.col.size": "Size",

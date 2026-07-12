@@ -426,6 +426,60 @@ async fn execute_update(
     Ok(())
 }
 
+/// Delete and re-download all pack mods (force reinstall).
+#[tauri::command]
+async fn reinstall_mods(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<serde_json::Value, LauncherError> {
+    // Prefer cached remote/local pack list
+    let mut manifest = state.cached_manifest.lock().unwrap().clone();
+    if manifest.is_none() {
+        let path = paths::local_manifest_file();
+        if path.exists() {
+            manifest = Some(read_manifest_file(&path)?);
+        }
+    }
+    // Last resort: bundled / remote
+    let manifest = if let Some(m) = manifest {
+        m
+    } else if let Some(path) = resolve_bundled_manifest_path(&app) {
+        read_manifest_file(&path)?
+    } else {
+        http::download_json::<PackManifest>(&state.http_client, MANIFEST_URL).await?
+    };
+
+    if manifest.mods.is_empty() {
+        return Err(LauncherError::Manifest(
+            "No hay mods en el manifest para reinstalar".to_string(),
+        ));
+    }
+
+    let update_diff = diff::force_reinstall_mods_diff(&manifest);
+    let count = update_diff.mods_to_download.len();
+    let total = update_diff.total_download_size;
+
+    log::info!("Force reinstalling {count} mods (~{total} bytes)");
+
+    *state.cached_manifest.lock().unwrap() = Some(manifest.clone());
+    *state.cached_diff.lock().unwrap() = Some(update_diff.clone());
+
+    downloader::execute_diff(&state.http_client, &update_diff, &manifest, &app).await?;
+
+    let local_path = paths::local_manifest_file();
+    if let Some(parent) = local_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let json = serde_json::to_string_pretty(&manifest)?;
+    std::fs::write(&local_path, json)?;
+    *state.cached_diff.lock().unwrap() = None;
+
+    Ok(serde_json::json!({
+        "reinstalled": count,
+        "totalDownloadSize": total,
+    }))
+}
+
 #[tauri::command]
 fn get_local_manifest(state: State<'_, AppState>) -> Result<Option<serde_json::Value>, LauncherError> {
     // Try cache first
@@ -1302,6 +1356,7 @@ pub fn run() {
             // Modpack
             check_for_updates,
             execute_update,
+            reinstall_mods,
             get_local_manifest,
             get_mod_icons,
             // Minecraft
