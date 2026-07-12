@@ -98,7 +98,7 @@ export interface ModEntry {
   side: "client" | "server" | "both";
 }
 
-export type OverwritePolicy = "always" | "once" | "never";
+export type OverwritePolicy = "always" | "once" | "never" | "preserve";
 
 export interface ConfigEntry {
   path: string;
@@ -147,6 +147,7 @@ export interface JavaConfig {
 /** Microsoft auth device code response */
 export interface DeviceCodeResponse {
   userCode: string;
+  deviceCode: string;
   verificationUri: string;
   expiresIn: number;
   interval: number;

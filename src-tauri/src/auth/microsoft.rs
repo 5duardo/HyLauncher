@@ -14,10 +14,29 @@ use crate::utils::error::{LauncherError, Result};
 
 // ---- Constants ----
 
-/// Replace this with your Azure AD Application (client) ID
-const CLIENT_ID: &str = "00000000-0000-0000-0000-000000000000";
+const PLACEHOLDER_CLIENT_ID: &str = "00000000-0000-0000-0000-000000000000";
+/// Client ID de Prism Launcher — ya aprobado para api.minecraftservices.com
+const DEFAULT_CLIENT_ID: &str = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb";
 const TENANT: &str = "consumers";
 const SCOPE: &str = "XboxLive.signin XboxLive.offline_access";
+
+fn client_id() -> String {
+    if let Ok(id) = std::env::var("MICROSOFT_CLIENT_ID") {
+        let id = id.trim();
+        if !id.is_empty() && id != PLACEHOLDER_CLIENT_ID {
+            return id.to_string();
+        }
+    }
+
+    if let Some(id) = option_env!("MICROSOFT_CLIENT_ID") {
+        let id = id.trim();
+        if !id.is_empty() && id != PLACEHOLDER_CLIENT_ID {
+            return id.to_string();
+        }
+    }
+
+    DEFAULT_CLIENT_ID.to_string()
+}
 
 // ---- Types ----
 
@@ -141,6 +160,7 @@ pub struct MicrosoftAuthResult {
 
 /// Step 1: Request a device code from Microsoft
 pub async fn request_device_code(client: &Client) -> Result<DeviceCodeResponse> {
+    let client_id = client_id();
     let url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/devicecode",
         TENANT
@@ -148,7 +168,7 @@ pub async fn request_device_code(client: &Client) -> Result<DeviceCodeResponse> 
 
     let response = client
         .post(&url)
-        .form(&[("client_id", CLIENT_ID), ("scope", SCOPE)])
+        .form(&[("client_id", client_id.as_str()), ("scope", SCOPE)])
         .send()
         .await?;
 
@@ -170,6 +190,7 @@ pub async fn poll_for_token(
     interval: u64,
     expires_in: u64,
 ) -> Result<(String, Option<String>)> {
+    let client_id = client_id();
     let url = format!(
         "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
         TENANT
@@ -189,7 +210,7 @@ pub async fn poll_for_token(
             .post(&url)
             .form(&[
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                ("client_id", CLIENT_ID),
+                ("client_id", client_id.as_str()),
                 ("device_code", device_code),
             ])
             .send()
@@ -301,6 +322,18 @@ pub async fn xsts_auth(client: &Client, xbl_token: &str) -> Result<(String, Stri
     Ok((xsts.token, uhs))
 }
 
+fn map_minecraft_api_error(body: &str) -> String {
+    if body.contains("Invalid app registration") {
+        return "Tu app de Azure aún no está aprobada para la API de Minecraft. \
+                Completa el formulario en https://aka.ms/mce-reviewappid con tu Client ID \
+                y espera la respuesta de Microsoft (puede tardar semanas). \
+                Mientras tanto, el login Premium no funcionará."
+            .to_string();
+    }
+
+    format!("Error de autenticación con Minecraft: {}", body)
+}
+
 /// Step 5: Login to Minecraft Services
 pub async fn minecraft_auth(
     client: &Client,
@@ -320,7 +353,7 @@ pub async fn minecraft_auth(
 
     if !response.status().is_success() {
         let text = response.text().await.unwrap_or_default();
-        return Err(LauncherError::Auth(format!("Minecraft auth failed: {}", text)));
+        return Err(LauncherError::Auth(map_minecraft_api_error(&text)));
     }
 
     let mc: McAuthResponse = response.json().await?;
@@ -338,7 +371,14 @@ pub async fn get_minecraft_profile(
         .send()
         .await?;
 
-    if !response.status().is_success() {
+    let status = response.status();
+    if status.as_u16() == 404 {
+        return Err(LauncherError::Auth(
+            "Esta cuenta de Microsoft no tiene Minecraft Java comprado.".to_string(),
+        ));
+    }
+
+    if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
         return Err(LauncherError::Auth(format!(
             "Failed to get Minecraft profile: {}",

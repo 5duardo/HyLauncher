@@ -3,6 +3,7 @@
 // ============================================================
 
 use crate::modpack::diff::UpdateDiff;
+use crate::minecraft::launcher;
 use crate::utils::{error::Result, http, paths};
 use reqwest::Client;
 use tauri::Emitter;
@@ -81,14 +82,23 @@ pub async fn execute_diff(
         let url = config.url.replace("{baseUrl}", &manifest.base_url);
 
         let download_result = if url.contains("YOUR_USER") {
-            if config.path == "options.txt" {
-                let _ = std::fs::write(&dest, "version:3469\nlang:es_es\n");
+            if dest.exists() {
+                log::info!("Keeping existing config (user settings): {}", config.path);
+                Ok(0)
+            } else if config.path == "options.txt" {
+                let _ = std::fs::write(&dest, "version:3465\nlang:es_es\n");
+                Ok(0)
             } else if config.path == "servers.dat" {
-                let _ = std::fs::write(&dest, vec![]);
+                let _ = launcher::generate_servers_dat(
+                    &manifest.server.name,
+                    &manifest.server.address,
+                    manifest.server.port,
+                );
+                Ok(0)
             } else {
                 let _ = std::fs::write(&dest, vec![]);
+                Ok(0)
             }
-            Ok(0)
         } else {
             let expected_sha1 = if config.sha1 == "REPLACE_WITH_ACTUAL_SHA1" {
                 None
@@ -181,8 +191,10 @@ pub async fn execute_diff(
         completed += 1;
     }
 
-    // ---- Update options.txt with active resource packs ----
-    update_options_txt_packs(manifest)?;
+    // ---- Update options.txt resource packs only when packs changed ----
+    if !diff.resource_packs_to_update.is_empty() {
+        update_options_txt_packs(manifest)?;
+    }
 
     let _ = app_handle.emit("progress", serde_json::json!({
         "stage": "verifying",

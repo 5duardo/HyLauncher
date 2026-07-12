@@ -9,7 +9,7 @@ mod utils;
 
 use auth::{account_store::{AccountStore, StoredAccount, now_secs}, microsoft, offline};
 use minecraft::{fabric, java_manager, launcher, version_manifest};
-use modpack::{diff, downloader, manifest::PackManifest};
+use modpack::{diff, downloader, manifest::PackManifest, modrinth};
 use utils::{error::LauncherError, http, paths};
 
 use serde::{Deserialize, Serialize};
@@ -100,7 +100,7 @@ async fn poll_microsoft_login(
         access_token: Some(result.access_token),
         refresh_token: result.refresh_token,
         skin_url: Some(format!(
-            "https://crafatar.com/avatars/{}?size=36&overlay",
+            "https://mc-heads.net/avatar/{}/36",
             result.uuid.replace("-", "")
         )),
         last_used: now_secs(),
@@ -379,6 +379,14 @@ fn get_local_manifest(state: State<'_, AppState>) -> Result<Option<serde_json::V
     Ok(None)
 }
 
+#[tauri::command]
+async fn get_mod_icons(
+    state: State<'_, AppState>,
+    mods: Vec<modrinth::ModIconRequest>,
+) -> Result<std::collections::HashMap<String, String>, LauncherError> {
+    modrinth::fetch_mod_icons(&state.http_client, &mods).await
+}
+
 // ============================================================
 // Tauri Commands — Minecraft
 // ============================================================
@@ -504,6 +512,10 @@ async fn launch_game(
 
     *state.game_child.lock().unwrap() = Some(child);
 
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.minimize();
+    }
+
     let _ = app.emit("state_change", "running");
 
     Ok(())
@@ -569,6 +581,43 @@ fn save_settings(settings: LauncherSettings) -> Result<(), LauncherError> {
 // ============================================================
 // Tauri Commands — Window
 // ============================================================
+
+#[tauri::command]
+fn stop_game(state: State<'_, AppState>, app: AppHandle) -> Result<(), LauncherError> {
+    let mut child_guard = state.game_child.lock().unwrap();
+    if let Some(ref mut child) = *child_guard {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    *child_guard = None;
+    let _ = app.emit("state_change", "ready");
+    Ok(())
+}
+
+#[tauri::command]
+async fn restore_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[tauri::command]
+async fn toggle_maximize_window(app: AppHandle) -> Result<bool, LauncherError> {
+    if let Some(window) = app.get_webview_window("main") {
+        let maximized = window.is_maximized().unwrap_or(false);
+        if maximized {
+            let _ = window.unmaximize();
+            Ok(false)
+        } else {
+            let _ = window.maximize();
+            Ok(true)
+        }
+    } else {
+        Err(LauncherError::Install("Window not found".to_string()))
+    }
+}
 
 #[tauri::command]
 async fn minimize_window(app: AppHandle) {
@@ -722,6 +771,10 @@ async fn delete_optional_file(folder_type: String, filename: String) -> Result<(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env from project root (dev) or src-tauri (optional)
+    let _ = dotenvy::dotenv();
+    let _ = dotenvy::from_filename("../.env");
+
     // Ensure directories exist
     let _ = paths::ensure_dirs();
 
@@ -759,11 +812,13 @@ pub fn run() {
             check_for_updates,
             execute_update,
             get_local_manifest,
+            get_mod_icons,
             // Minecraft
             is_minecraft_installed,
             install_minecraft,
             launch_game,
             is_game_running,
+            stop_game,
             // Java
             is_java_available,
             install_java,
@@ -772,6 +827,8 @@ pub fn run() {
             save_settings,
             // Window
             minimize_window,
+            toggle_maximize_window,
+            restore_window,
             close_window,
             // Optional components
             check_optional_file,

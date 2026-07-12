@@ -71,6 +71,13 @@ export async function executeUpdate(): Promise<void> {
   return invoke("execute_update");
 }
 
+/** Fetch Modrinth icon URLs for a list of mods */
+export async function getModIcons(
+  mods: { id: string; url: string }[]
+): Promise<Record<string, string>> {
+  return invoke("get_mod_icons", { mods });
+}
+
 // ---- Minecraft ----
 
 /** Check if Minecraft + Fabric is fully installed */
@@ -91,6 +98,11 @@ export async function launchGame(): Promise<void> {
 /** Check if the game process is still running */
 export async function isGameRunning(): Promise<boolean> {
   return invoke("is_game_running");
+}
+
+/** Force-stop the running game process */
+export async function stopGame(): Promise<void> {
+  return invoke("stop_game");
 }
 
 // ---- Java ----
@@ -121,6 +133,14 @@ export async function saveSettings(settings: LauncherSettings): Promise<void> {
 
 export async function minimizeWindow(): Promise<void> {
   return invoke("minimize_window");
+}
+
+export async function toggleMaximizeWindow(): Promise<boolean> {
+  return invoke("toggle_maximize_window");
+}
+
+export async function restoreWindow(): Promise<void> {
+  return invoke("restore_window");
 }
 
 export async function closeWindow(): Promise<void> {

@@ -9,7 +9,8 @@ import * as cmd from "../lib/tauri-commands";
 export function useLaunch() {
   const [launcherState, setLauncherState] = useState<LauncherState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<any>(null);
+  const [isStoppingGame, setIsStoppingGame] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Listen for state changes from backend
   useEffect(() => {
@@ -35,9 +36,10 @@ export function useLaunch() {
         const running = await cmd.isGameRunning();
         if (!running) {
           setLauncherState("ready");
+          await cmd.restoreWindow();
           if (pollRef.current) clearInterval(pollRef.current);
         }
-      }, 5000);
+      }, 3000);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -53,6 +55,20 @@ export function useLaunch() {
     } catch (err) {
       setError(String(err));
       setLauncherState("error");
+    }
+  }, []);
+
+  const stopGame = useCallback(async () => {
+    setIsStoppingGame(true);
+    setError(null);
+    try {
+      await cmd.stopGame();
+      setLauncherState("ready");
+      await cmd.restoreWindow();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setIsStoppingGame(false);
     }
   }, []);
 
@@ -97,7 +113,9 @@ export function useLaunch() {
   return {
     launcherState,
     error,
+    isStoppingGame,
     launch,
+    stopGame,
     fullSetup,
     clearError,
     setLauncherState,

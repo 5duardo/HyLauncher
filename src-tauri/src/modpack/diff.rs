@@ -5,6 +5,32 @@
 use crate::modpack::manifest::*;
 use crate::utils::{http, paths};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+
+fn is_placeholder_sha1(sha1: &str) -> bool {
+    sha1.is_empty() || sha1 == "REPLACE_WITH_ACTUAL_SHA1"
+}
+
+async fn should_update_config(config_path: &Path, config: &ConfigEntry) -> bool {
+    match config.overwrite_policy.as_str() {
+        "never" | "preserve" => false,
+        "once" => !config_path.exists(),
+        "always" => {
+            if !config_path.exists() {
+                return true;
+            }
+            // Sin SHA1 real del servidor: no pisar ajustes locales del jugador
+            if is_placeholder_sha1(&config.sha1) {
+                return false;
+            }
+            match http::compute_file_sha1(config_path).await {
+                Ok(hash) => hash != config.sha1,
+                Err(_) => false,
+            }
+        }
+        _ => !config_path.exists(),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateDiff {
@@ -76,22 +102,7 @@ pub async fn compute_diff(
         let config_path = instance.join(&config.path);
         let resolved_url = remote.resolve_url(&config.url);
 
-        let should_update = match config.overwrite_policy.as_str() {
-            "always" => {
-                if config_path.exists() {
-                    // Check if SHA1 differs
-                    match http::compute_file_sha1(&config_path).await {
-                        Ok(hash) => hash != config.sha1,
-                        Err(_) => true,
-                    }
-                } else {
-                    true
-                }
-            }
-            "once" => !config_path.exists(),
-            "never" => false,
-            _ => !config_path.exists(), // Default to "once" behavior
-        };
+        let should_update = should_update_config(&config_path, config).await;
 
         if should_update {
             configs_to_update.push(ConfigEntry {

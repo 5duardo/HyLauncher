@@ -2,6 +2,9 @@
 // HyLauncher — MicrosoftLogin Component
 // ============================================================
 
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FaKey } from "react-icons/fa";
+import { open } from "@tauri-apps/plugin-shell";
 import type { DeviceCodeResponse } from "../lib/types";
 
 interface MicrosoftLoginProps {
@@ -12,6 +15,35 @@ interface MicrosoftLoginProps {
   isLoading: boolean;
 }
 
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function openVerificationUrl(url: string): Promise<void> {
+  try {
+    await open(url);
+  } catch {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
 export function MicrosoftLogin({
   onStart,
   onCancel,
@@ -19,22 +51,53 @@ export function MicrosoftLogin({
   isPolling,
   isLoading,
 }: MicrosoftLoginProps) {
+  const [copied, setCopied] = useState(false);
+  const autoStartedRef = useRef<string | null>(null);
+
+  const handleCopyCode = useCallback(async (code: string) => {
+    const ok = await copyToClipboard(code);
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!deviceCode || !isPolling) {
+      autoStartedRef.current = null;
+      return;
+    }
+
+    if (autoStartedRef.current === deviceCode.userCode) return;
+    autoStartedRef.current = deviceCode.userCode;
+
+    void handleCopyCode(deviceCode.userCode);
+    void openVerificationUrl(deviceCode.verificationUri);
+  }, [deviceCode, isPolling, handleCopyCode]);
+
   if (deviceCode && isPolling) {
     return (
       <div style={{ marginTop: "20px" }}>
         <div className="device-code-display">
-          <div className="code">{deviceCode.userCode}</div>
+          <button
+            type="button"
+            className={`code code--clickable ${copied ? "code--copied" : ""}`}
+            onClick={() => handleCopyCode(deviceCode.userCode)}
+            title="Clic para copiar"
+          >
+            {deviceCode.userCode}
+          </button>
+          {copied && <span className="code-copy-hint">Copiado al portapapeles ✓</span>}
           <p className="instruction">
-            Abre{" "}
-            <span
+            El código se copió y se abrió{" "}
+            <button
+              type="button"
               className="link"
-              onClick={() =>
-                window.open(deviceCode.verificationUri, "_blank")
-              }
+              onClick={() => openVerificationUrl(deviceCode.verificationUri)}
             >
               {deviceCode.verificationUri}
-            </span>{" "}
-            en tu navegador e ingresa el código de arriba.
+            </button>{" "}
+            en tu navegador. Pega el código allí para continuar.
           </p>
         </div>
 
@@ -69,8 +132,7 @@ export function MicrosoftLogin({
         }}
       >
         Inicia sesión con tu cuenta de Microsoft para jugar con tu perfil
-        premium. Se abrirá una ventana del navegador para autenticarte de forma
-        segura.
+        premium. Se copiará el código y se abrirá el navegador automáticamente.
       </p>
       <button
         className="btn btn--primary btn--full"
@@ -83,9 +145,7 @@ export function MicrosoftLogin({
           </>
         ) : (
           <>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-            </svg>
+            <FaKey size={14} style={{ marginRight: 6 }} />
             Iniciar con Microsoft
           </>
         )}

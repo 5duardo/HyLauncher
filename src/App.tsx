@@ -3,8 +3,23 @@
 // ============================================================
 
 import { useState, useEffect } from "react";
+import {
+  FaMinus,
+  FaSquare,
+  FaWindowRestore,
+  FaTimes,
+  FaGamepad,
+  FaCube,
+  FaLayerGroup,
+  FaMagic,
+  FaCog,
+  FaSearch,
+  FaDownload,
+  FaCheck,
+} from "react-icons/fa";
 import { Background } from "./components/Background";
-import { PlayButton } from "./components/PlayButton";
+import { PlayDashboard } from "./components/PlayDashboard";
+import { ModIcon } from "./components/ModIcon";
 import { ProgressBar } from "./components/ProgressBar";
 import { AccountSelector } from "./components/AccountSelector";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -12,113 +27,8 @@ import { StatusBanner } from "./components/StatusBanner";
 import { useAuth } from "./hooks/useAuth";
 import { useModpack } from "./hooks/useModpack";
 import { useLaunch } from "./hooks/useLaunch";
+import { useModIcons } from "./hooks/useModIcons";
 import * as cmd from "./lib/tauri-commands";
-import type { LauncherState } from "./lib/types";
-
-const STATE_LABELS: Record<
-  LauncherState,
-  { label: string; icon: React.ReactNode }
-> = {
-  idle: {
-    label: "Esperando...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-text-muted)' }}>
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-  },
-  checking: {
-    label: "Buscando actualizaciones...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-cyan)' }} className="spinner-icon">
-        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-      </svg>
-    ),
-  },
-  needs_install: {
-    label: "Requiere instalación de archivos",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-warning)' }}>
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-      </svg>
-    ),
-  },
-  needs_update: {
-    label: "Actualización disponible en pestaña de Mods",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-warning)' }}>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="16" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12.01" y2="8" />
-      </svg>
-    ),
-  },
-  downloading: {
-    label: "Descargando mods y recursos...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-cyan)' }}>
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-      </svg>
-    ),
-  },
-  installing: {
-    label: "Instalando archivos del juego...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-cyan)' }}>
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-      </svg>
-    ),
-  },
-  verifying: {
-    label: "Verificando archivos locales...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-cyan)' }}>
-        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-        <path d="m9 12 2 2 4-4" />
-      </svg>
-    ),
-  },
-  ready: {
-    label: "Listo para jugar",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-success)' }}>
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-        <polyline points="22 4 12 14.01 9 11.01" />
-      </svg>
-    ),
-  },
-  launching: {
-    label: "Iniciando Minecraft...",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-accent-hover)' }}>
-        <polygon points="5 3 19 12 5 21 5 3" />
-      </svg>
-    ),
-  },
-  running: {
-    label: "Minecraft está en ejecución",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-accent-hover)' }}>
-        <line x1="6" y1="12" x2="10" y2="12" />
-        <line x1="8" y1="10" x2="8" y2="14" />
-        <line x1="15" y1="13" x2="15.01" y2="13" />
-        <line x1="18" y1="11" x2="18.01" y2="11" />
-        <rect x="2" y="6" width="20" height="12" rx="3" />
-      </svg>
-    ),
-  },
-  error: {
-    label: "Error al verificar o lanzar",
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, color: 'var(--color-error)' }}>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="15" y1="9" x2="9" y2="15" />
-        <line x1="9" y1="9" x2="15" y2="15" />
-      </svg>
-    ),
-  },
-};
 
 export default function App() {
   const auth = useAuth();
@@ -130,6 +40,7 @@ export default function App() {
   const [installedTextures, setInstalledTextures] = useState<Record<string, boolean>>({});
   const [installedShaders, setInstalledShaders] = useState<Record<string, boolean>>({});
   const [optionalInstalling, setOptionalInstalling] = useState<Record<string, boolean>>({});
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const checkOptionalPacks = async () => {
     if (!modpack.manifest) return;
@@ -198,20 +109,33 @@ export default function App() {
     modpack.checkForUpdates();
   }, []);
 
+  useEffect(() => {
+    if (launch.launcherState === "running") {
+      setActiveTab("play");
+    }
+  }, [launch.launcherState]);
+
   const handlePlay = async () => {
     if (!auth.activeAccount) return;
+
+    const missingMods = modpack.updateDiff?.modsToDownload.length ?? 0;
+    if (missingMods > 0 || launch.launcherState === "needs_update") {
+      setActiveTab("mods");
+      return;
+    }
 
     if (
       launch.launcherState === "error" ||
       launch.launcherState === "idle" ||
-      launch.launcherState === "needs_install" ||
-      launch.launcherState === "needs_update"
+      launch.launcherState === "needs_install"
     ) {
       await launch.fullSetup();
-      await modpack.checkForUpdates();
-      if ((launch.launcherState as string) === "ready") {
-        await launch.launch();
+      const diff = await modpack.checkForUpdates();
+      if ((diff?.modsToDownload.length ?? 0) > 0) {
+        setActiveTab("mods");
+        return;
       }
+      await launch.launch();
     } else if (launch.launcherState === "ready") {
       await launch.launch();
     }
@@ -224,6 +148,7 @@ export default function App() {
     launch.launcherState === "verifying";
 
   const mods = modpack.manifest?.mods ?? [];
+  const { icons: modIcons } = useModIcons(mods);
   const filteredMods = mods.filter((mod) =>
     mod.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
     mod.filename.toLowerCase().includes(searchQuery.toLowerCase())
@@ -255,12 +180,16 @@ export default function App() {
 
   const handleInstallMods = async () => {
     launch.setLauncherState("downloading");
+    modpack.clearError();
     try {
       await modpack.executeUpdate();
-      launch.setLauncherState("ready");
+      const diff = await modpack.checkForUpdates();
+      launch.setLauncherState(
+        (diff?.modsToDownload.length ?? 0) > 0 ? "needs_update" : "ready"
+      );
     } catch (e) {
       console.error(e);
-      launch.setLauncherState("error");
+      launch.setLauncherState("needs_update");
     }
   };
 
@@ -271,7 +200,12 @@ export default function App() {
       {/* Custom Titlebar */}
       <div className="titlebar">
         <span className="titlebar-title">
-          {activeTab === "play" ? "HyLauncher — Jugar" : `HyLauncher — Mods (${mods.length})`}
+          <img src="/logo.png" alt="" className="titlebar-logo" aria-hidden="true" />
+          {launch.launcherState === "running"
+            ? "HyLauncher — Jugando"
+            : activeTab === "play"
+            ? "HyLauncher — Jugar"
+            : `HyLauncher — Mods (${mods.length})`}
         </span>
         <div className="titlebar-controls">
           <button
@@ -279,93 +213,76 @@ export default function App() {
             onClick={() => cmd.minimizeWindow()}
             title="Minimizar"
           >
-            ─
+            <FaMinus size={10} />
+          </button>
+          <button
+            className="titlebar-btn"
+            onClick={async () => {
+              const maximized = await cmd.toggleMaximizeWindow();
+              setIsMaximized(maximized);
+            }}
+            title={isMaximized ? "Restaurar" : "Maximizar"}
+          >
+            {isMaximized ? <FaWindowRestore size={10} /> : <FaSquare size={10} />}
           </button>
           <button
             className="titlebar-btn close"
             onClick={() => cmd.closeWindow()}
             title="Cerrar"
           >
-            ✕
+            <FaTimes size={11} />
           </button>
         </div>
       </div>
 
       <div className="app-layout">
         {/* Sidebar */}
-        <aside className="sidebar">
-          {/* Brand/Logo */}
-          <div className="sidebar-brand">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-cyan)', filter: 'drop-shadow(0 0 4px var(--color-cyan-glow))' }}>
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="var(--color-cyan)" />
-            </svg>
-            <div className="brand-info">
-              <span className="brand-name">HyLauncher</span>
-              <span className="brand-sub">v1.0.0</span>
-            </div>
+        <aside className="sidebar sidebar--lunar">
+          <div className="sidebar-brand sidebar-brand--icon">
+            <img src="/logo.png" alt="HyLauncher" className="brand-logo-img" title="HyLauncher" />
           </div>
 
-          {/* Navigation Links */}
-          <nav className="sidebar-nav">
+          <nav className="sidebar-nav sidebar-nav--icon">
             <button
               className={`sidebar-nav-item ${activeTab === 'play' ? 'active' : ''}`}
               onClick={() => setActiveTab('play')}
+              title="Jugar"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
-                <rect x="2" y="6" width="20" height="12" rx="3" />
-                <line x1="6" y1="12" x2="10" y2="12" />
-                <line x1="8" y1="10" x2="8" y2="14" />
-              </svg>
-              Jugar
+              <FaGamepad size={20} />
             </button>
 
             <button
               className={`sidebar-nav-item ${activeTab === 'mods' ? 'active' : ''}`}
               onClick={() => setActiveTab('mods')}
+              title="Mods"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-              Mods
+              <FaCube size={20} />
             </button>
 
             <button
               className={`sidebar-nav-item ${activeTab === 'textures' ? 'active' : ''}`}
               onClick={() => setActiveTab('textures')}
+              title="Texturas"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-              Texturas
+              <FaLayerGroup size={20} />
             </button>
 
             <button
               className={`sidebar-nav-item ${activeTab === 'shaders' ? 'active' : ''}`}
               onClick={() => setActiveTab('shaders')}
+              title="Shaders"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-              Shaders
+              <FaMagic size={20} />
             </button>
           </nav>
 
-          {/* Bottom Settings Button in Sidebar */}
           <div className="sidebar-footer">
             <button
               className="sidebar-footer-item"
               onClick={() => setShowSettings(true)}
+              title="Ajustes"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 2 }}>
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-              Ajustes
+              <FaCog size={20} />
             </button>
           </div>
         </aside>
@@ -374,21 +291,26 @@ export default function App() {
         <div className="main-content">
           {/* Header: Brand + Account */}
           <header className="header">
+            {activeTab === "play" ? (
+              <div className="lunar-welcome">
+                <span className="lunar-welcome-text">Bienvenido de vuelta,</span>
+                <span className="lunar-welcome-user">
+                  {auth.activeAccount?.username ?? "Jugador"}
+                  {auth.activeAccount && <span className="lunar-status-dot" />}
+                </span>
+              </div>
+            ) : (
             <div className="brand">
               <div className="brand-text">
                 <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700 }}>
-                  {activeTab === "play" 
-                    ? (modpack.manifest?.packName ?? "HyPack") 
-                    : activeTab === "mods" 
+                  {activeTab === "mods" 
                     ? "Listado de Mods" 
                     : activeTab === "textures" 
                     ? "Packs de Texturas" 
                     : "Packs de Shaders"}
                 </h1>
                 <span className="version" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                  {activeTab === "play" 
-                    ? `Minecraft ${modpack.manifest?.minecraft ?? "1.20.1"} · Fabric ${modpack.manifest?.fabricLoader ?? ""}`
-                    : activeTab === "mods"
+                  {activeTab === "mods"
                     ? `Sincronizados con el servidor (${mods.length} en total)`
                     : activeTab === "textures"
                     ? `Opciones de apariencia (${optionalResourcePacks.length} disponibles)`
@@ -397,6 +319,7 @@ export default function App() {
                 </span>
               </div>
             </div>
+            )}
 
             <AccountSelector
               activeAccount={auth.activeAccount}
@@ -435,65 +358,25 @@ export default function App() {
 
           {/* Tab View Switcher */}
           {activeTab === "play" && (
-            <div className="center-area" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: '24px' }}>
-              <div className="server-info" style={{ textAlign: 'center' }}>
-                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 800, marginBottom: '8px', color: 'white' }}>
-                  {modpack.manifest?.server.name ?? "HyServer"}
-                </h2>
-                <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', maxWidth: '400px', margin: '0 auto 16px' }}>
-                  {modpack.manifest?.packDescription ?? "Modpack oficial del servidor"}
-                </p>
-                <div className="server-meta" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                  <span className="meta-chip">
-                    <span className="dot" />
-                    Minecraft {modpack.manifest?.minecraft ?? "1.20.1"}
-                  </span>
-                  <span className="meta-chip">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, color: 'var(--color-cyan)' }}>
-                      <polyline points="16 18 22 12 16 6" />
-                      <polyline points="8 6 2 12 8 18" />
-                    </svg>
-                    Fabric {modpack.manifest?.fabricLoader ?? ""}
-                  </span>
-                  <span className="meta-chip" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('mods')}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, color: 'var(--color-accent-hover)' }}>
-                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                      <line x1="12" y1="22.08" x2="12" y2="12" />
-                    </svg>
-                    {mods.length} mods
-                  </span>
-                </div>
-              </div>
-
-              {showProgress && (
-                <ProgressBar
-                  progress={modpack.progress}
-                  label={modpack.progressLabel}
-                  percent={modpack.progressPercent}
-                />
-              )}
-
-              <PlayButton
-                state={launch.launcherState}
-                onClick={handlePlay}
-                disabled={!auth.activeAccount || launch.launcherState !== "ready"}
-              />
-
-              {!auth.activeAccount && (
-                <p style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "-8px" }}>
-                  Inicia sesión para jugar
-                </p>
-              )}
-
-              {/* Bottom status bar indicator */}
-              <div className="bottom-bar" style={{ width: '100%', maxWidth: '480px', marginTop: 'auto', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '16px' }}>
-                <div className="status-indicator">
-                  {STATE_LABELS[launch.launcherState]?.icon}
-                  <span>{STATE_LABELS[launch.launcherState]?.label ?? launch.launcherState}</span>
-                </div>
-              </div>
-            </div>
+            <PlayDashboard
+              manifest={modpack.manifest}
+              modsCount={mods.length}
+              missingMods={modpack.updateDiff?.modsToDownload.length ?? 0}
+              launcherState={launch.launcherState}
+              username={auth.activeAccount?.username ?? "Jugador"}
+              showProgress={showProgress}
+              progress={modpack.progress}
+              progressLabel={modpack.progressLabel}
+              progressPercent={modpack.progressPercent}
+              hasAccount={!!auth.activeAccount}
+              isStoppingGame={launch.isStoppingGame}
+              onPlay={handlePlay}
+              onStopGame={launch.stopGame}
+              onOpenSettings={() => setShowSettings(true)}
+              onOpenMods={() => setActiveTab("mods")}
+              onOpenTextures={() => setActiveTab("textures")}
+              onOpenShaders={() => setActiveTab("shaders")}
+            />
           )}
 
           {activeTab === "mods" && (
@@ -501,10 +384,7 @@ export default function App() {
               {/* Search and Action Bar */}
               <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
                 <div className="mods-search-container" style={{ flex: 1 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mods-search-icon">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
                     placeholder="Buscar mods..."
@@ -517,60 +397,25 @@ export default function App() {
                 {/* Install / Sync button */}
                 {modpack.updateDiff && modpack.updateDiff.modsToDownload.length > 0 ? (
                   <button
-                    className="btn btn--primary"
-                    style={{
-                      padding: '10px 20px',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: 'linear-gradient(135deg, var(--color-accent-start), var(--color-accent-end))',
-                      boxShadow: '0 0 12px rgba(124, 58, 237, 0.3)',
-                      border: 'none',
-                      color: 'white',
-                      cursor: 'pointer',
-                      flexShrink: 0
-                    }}
+                    className="btn btn--primary btn--bar"
                     onClick={handleInstallMods}
                     disabled={modpack.isUpdating}
                   >
                     {modpack.isUpdating ? (
                       <>
-                        <span className="spinner" style={{ width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                        <span className="spinner" />
                         <span>Instalando... ({modpack.progressPercent}%)</span>
                       </>
                     ) : (
                       <>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
+                        <FaDownload size={14} />
                         <span>Instalar Mods ({modpack.updateDiff.modsToDownload.length})</span>
                       </>
                     )}
                   </button>
                 ) : (
-                  <div
-                    style={{
-                      padding: '10px 16px',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: 'rgba(16, 185, 129, 0.1)',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
-                      color: 'var(--color-success)',
-                      flexShrink: 0
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                  <div className="btn btn--status btn--bar">
+                    <FaCheck size={14} />
                     <span>Mods al día</span>
                   </div>
                 )}
@@ -615,12 +460,7 @@ export default function App() {
                           <tr key={mod.id}>
                             <td>
                               <div className="mod-row-info">
-                                <div className="mod-row-icon">
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                                  </svg>
-                                </div>
+                                <ModIcon modId={mod.id} iconUrl={modIcons[mod.id]} />
                                 <div className="mod-row-name-container">
                                   <span className="mod-row-name" title={mod.id}>
                                     {mod.id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
@@ -658,10 +498,7 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={32} />
                   <span>No se encontraron mods que coincidan con la búsqueda</span>
                 </div>
               )}
@@ -673,10 +510,7 @@ export default function App() {
               {/* Search Bar */}
               <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
                 <div className="mods-search-container" style={{ flex: 1 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mods-search-icon">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
                     placeholder="Buscar texturas..."
@@ -715,11 +549,7 @@ export default function App() {
                               <td>
                                 <div className="mod-row-info">
                                   <div className="mod-row-icon" style={{ color: 'var(--color-cyan)' }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                      <path d="M2 17l10 5 10-5" />
-                                      <path d="M2 12l10 5 10-5" />
-                                    </svg>
+                                    <FaLayerGroup size={16} />
                                   </div>
                                   <div className="mod-row-name-container">
                                     <span className="mod-row-name" style={{ color: 'white', fontWeight: 600 }}>{rp.name}</span>
@@ -735,26 +565,13 @@ export default function App() {
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 <button
-                                  className={`btn ${isInstalled ? 'btn--secondary' : 'btn--primary'}`}
-                                  style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: isInstalled ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, var(--color-accent-start), var(--color-accent-end))',
-                                    border: isInstalled ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
-                                    color: isInstalled ? '#ef4444' : 'white',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                  }}
+                                  className={`btn btn--sm ${isInstalled ? "btn--danger" : "btn--primary"}`}
                                   onClick={() => handleToggleOptional(rp.id, "resourcepack")}
                                   disabled={isInstalling}
                                 >
                                   {isInstalling ? (
                                     <>
-                                      <span className="spinner" style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                                      <span className="spinner" />
                                       <span>Instalando...</span>
                                     </>
                                   ) : isInstalled ? (
@@ -773,10 +590,7 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={32} />
                   <span>No se encontraron texturas</span>
                 </div>
               )}
@@ -788,10 +602,7 @@ export default function App() {
               {/* Search Bar */}
               <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
                 <div className="mods-search-container" style={{ flex: 1 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mods-search-icon">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
                     placeholder="Buscar shaders..."
@@ -830,10 +641,7 @@ export default function App() {
                               <td>
                                 <div className="mod-row-info">
                                   <div className="mod-row-icon" style={{ color: 'var(--color-cyan)' }}>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <circle cx="12" cy="12" r="10" />
-                                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                                    </svg>
+                                    <FaMagic size={16} />
                                   </div>
                                   <div className="mod-row-name-container">
                                     <span className="mod-row-name" style={{ color: 'white', fontWeight: 600 }}>{sp.name}</span>
@@ -849,26 +657,13 @@ export default function App() {
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 <button
-                                  className={`btn ${isInstalled ? 'btn--secondary' : 'btn--primary'}`}
-                                  style={{
-                                    padding: '6px 12px',
-                                    borderRadius: 'var(--radius-sm)',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: isInstalled ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, var(--color-accent-start), var(--color-accent-end))',
-                                    border: isInstalled ? '1px solid rgba(239, 68, 68, 0.3)' : 'none',
-                                    color: isInstalled ? '#ef4444' : 'white',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                  }}
+                                  className={`btn btn--sm ${isInstalled ? "btn--danger" : "btn--primary"}`}
                                   onClick={() => handleToggleOptional(sp.id, "shaderpack")}
                                   disabled={isInstalling}
                                 >
                                   {isInstalling ? (
                                     <>
-                                      <span className="spinner" style={{ width: '10px', height: '10px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                                      <span className="spinner" />
                                       <span>Instalando...</span>
                                     </>
                                   ) : isInstalled ? (
@@ -887,10 +682,7 @@ export default function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
+                  <FaSearch size={32} />
                   <span>No se encontraron shaders</span>
                 </div>
               )}

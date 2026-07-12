@@ -3,6 +3,7 @@
 // ============================================================
 
 import { useState } from "react";
+import { FaBolt } from "react-icons/fa";
 
 interface OfflineLoginProps {
   onSubmit: (username: string) => void;
@@ -62,9 +63,7 @@ export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
           </>
         ) : (
           <>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" />
-            </svg>
+            <FaBolt size={12} style={{ marginRight: 6 }} />
             Entrar como Offline
           </>
         )}

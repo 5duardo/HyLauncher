@@ -98,7 +98,7 @@ export function useAuth() {
 
   const pollForAuth = useCallback(async (dc: DeviceCodeResponse) => {
     try {
-      const account = await cmd.pollMicrosoftLogin(dc.userCode);
+      const account = await cmd.pollMicrosoftLogin(dc.deviceCode);
       await cmd.setActiveAccount(account.id);
       setState((s) => ({
         ...s,

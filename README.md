@@ -53,6 +53,89 @@ El instalador final se generará en la carpeta `src-tauri/target/release/bundle/
 
 ---
 
+## Login con Microsoft (Premium)
+
+El launcher ya incluye el flujo OAuth2 (Device Code) → Xbox Live → Minecraft Services.
+
+**Por defecto usa el Client ID de [Prism Launcher](https://github.com/PrismLauncher/PrismLauncher)** (open source, ya aprobado por Microsoft para la API de Minecraft). No necesitas registrar Azure ni esperar aprobación para probar login Premium.
+
+### Client ID propio (opcional, para producción)
+
+Si quieres usar tu propia marca/app en Azure:
+
+1. Entra a [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**.
+2. **Name:** `HyLauncher` (o el nombre de tu servidor).
+3. **Supported account types:** *Accounts in any organizational directory and personal Microsoft accounts*.
+4. **Redirect URI:** déjalo vacío (no hace falta para Device Code Flow).
+5. Clic en **Register**.
+6. Copia el **Application (client) ID** (formato UUID).
+
+### Paso 2 — Habilitar flujo público
+
+1. En tu app → **Authentication**.
+2. En **Advanced settings** → **Allow public client flows** → **Yes**.
+3. Guarda los cambios.
+
+> No necesitas agregar permisos de Microsoft Graph. Los scopes `XboxLive.signin` se piden en el login automáticamente.
+
+### Paso 3 — Solicitar acceso a la API de Minecraft (obligatorio)
+
+Desde 2023, **Microsoft no permite** que apps nuevas de Azure usen `api.minecraftservices.com` sin aprobación previa. Si ves el error *"Invalid app registration"*, es porque falta este paso.
+
+1. Abre el formulario oficial: **[aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid)**
+2. Rellena con los datos de tu app:
+   - **Application (client) ID:** el UUID de tu app de Azure (el mismo de `.env`)
+   - **Tenant ID:** `consumers` (cuentas personales de Microsoft)
+   - Describe HyLauncher como launcher para tu servidor de Minecraft
+3. Envía el formulario y **espera la respuesta por correo** (puede tardar días o semanas)
+4. Cuando Microsoft apruebe tu app, el login Premium funcionará sin cambiar código
+
+Hasta que aprueben tu app, el flujo llegará hasta Microsoft/Xbox pero fallará al conectar con Minecraft.
+
+### Paso 4 — Configurar Client ID propio (opcional)
+
+Solo si completaste la aprobación de Microsoft, crea `.env`:
+
+```env
+MICROSOFT_CLIENT_ID=tu-client-id-aprobado
+```
+
+Si **no** tienes `.env` o dejas la variable vacía, se usa el Client ID de Prism automáticamente.
+
+Reinicia el launcher:
+
+```bash
+npm run tauri dev
+```
+
+### Paso 5 — Iniciar sesión en el launcher
+
+1. Clic en tu perfil / **Iniciar sesión**.
+2. Pestaña **Premium** → **Iniciar con Microsoft**.
+3. Se muestra un código (ej. `ABCD-1234`).
+4. Abre [https://microsoft.com/link](https://microsoft.com/link) en el navegador e ingresa el código.
+5. Inicia sesión con la cuenta que **tiene Minecraft Java comprado**.
+6. El launcher detectará el login y guardará la cuenta como **Premium**.
+
+### Requisitos de la cuenta
+
+- Debe ser una cuenta **Microsoft** (no solo Xbox).
+- Debe tener **Minecraft: Java Edition** comprado en esa cuenta.
+- Si la cuenta no tiene el juego, verás: *"Esta cuenta de Microsoft no tiene Minecraft Java comprado"*.
+
+### Producción (instalador .exe)
+
+Para builds de release, el Client ID se puede:
+
+- Leer de `.env` al compilar (`MICROSOFT_CLIENT_ID=... npm run tauri build`), o
+- Embeberse en compile-time si defines la variable antes de `cargo build`.
+
+### Bug corregido
+
+El frontend enviaba el código equivocado al hacer polling (`userCode` en lugar de `deviceCode`). Ya está corregido — sin esto el login nunca completaba aunque Azure estuviera bien configurado.
+
+---
+
 ## Estructura del Archivo `manifest.json`
 
 El launcher requiere un archivo `manifest.json` hosteado en tu servidor web (o localmente como `manifest-example.json` para pruebas). Ejemplo de esquema:

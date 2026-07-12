@@ -8,26 +8,34 @@ interface PlayButtonProps {
   state: LauncherState;
   onClick: () => void;
   disabled?: boolean;
+  variant?: "default" | "lunar";
+  subtitle?: string;
 }
 
 const BUTTON_CONFIG: Record<
   LauncherState,
   { label: string; showSpinner: boolean; className: string }
 > = {
-  idle: { label: "Jugar", showSpinner: false, className: "" },
-  checking: { label: "Verificando...", showSpinner: true, className: "play-button--installing" },
-  needs_install: { label: "Instalar y Jugar", showSpinner: false, className: "" },
-  needs_update: { label: "Actualizar y Jugar", showSpinner: false, className: "" },
-  downloading: { label: "Descargando...", showSpinner: true, className: "play-button--installing" },
-  installing: { label: "Instalando...", showSpinner: true, className: "play-button--installing" },
-  verifying: { label: "Verificando...", showSpinner: true, className: "play-button--installing" },
-  ready: { label: "Jugar", showSpinner: false, className: "" },
-  launching: { label: "Lanzando...", showSpinner: true, className: "play-button--installing" },
-  running: { label: "Jugando", showSpinner: false, className: "play-button--installing" },
-  error: { label: "Reintentar", showSpinner: false, className: "play-button--error" },
+  idle: { label: "LANZAR JUEGO", showSpinner: false, className: "" },
+  checking: { label: "VERIFICANDO...", showSpinner: true, className: "play-button--installing" },
+  needs_install: { label: "INSTALAR Y JUGAR", showSpinner: false, className: "" },
+  needs_update: { label: "INSTALAR MODS", showSpinner: false, className: "play-button--warning" },
+  downloading: { label: "DESCARGANDO...", showSpinner: true, className: "play-button--installing" },
+  installing: { label: "INSTALANDO...", showSpinner: true, className: "play-button--installing" },
+  verifying: { label: "VERIFICANDO...", showSpinner: true, className: "play-button--installing" },
+  ready: { label: "LANZAR JUEGO", showSpinner: false, className: "" },
+  launching: { label: "LANZANDO...", showSpinner: true, className: "play-button--installing" },
+  running: { label: "JUGANDO", showSpinner: false, className: "play-button--installing" },
+  error: { label: "REINTENTAR", showSpinner: false, className: "play-button--error" },
 };
 
-export function PlayButton({ state, onClick, disabled }: PlayButtonProps) {
+export function PlayButton({
+  state,
+  onClick,
+  disabled,
+  variant = "default",
+  subtitle,
+}: PlayButtonProps) {
   const config = BUTTON_CONFIG[state];
   const isDisabled =
     disabled ||
@@ -38,18 +46,26 @@ export function PlayButton({ state, onClick, disabled }: PlayButtonProps) {
     state === "running" ||
     state === "checking";
 
+  const isLunar = variant === "lunar";
+
   return (
-    <div className="play-button-wrapper">
-      <div className="play-glow" />
+    <div className={`play-button-wrapper ${isLunar ? "play-button-wrapper--lunar" : ""}`}>
+      {isLunar && <div className="play-glow play-glow--lunar" />}
+      {!isLunar && <div className="play-glow" />}
       <button
-        className={`play-button ${config.className}`}
+        className={`play-button ${isLunar ? "play-button--lunar" : ""} ${config.className}`}
         onClick={onClick}
         disabled={isDisabled}
         id="play-button"
       >
-        <span className="btn-content">
+        <span className={`btn-content ${isLunar ? "btn-content--lunar" : ""}`}>
           {config.showSpinner && <span className="spinner" />}
-          {config.label}
+          <span className="btn-label-group">
+            <span className="btn-label-main">{config.label}</span>
+            {isLunar && subtitle && (
+              <span className="btn-label-sub">{subtitle}</span>
+            )}
+          </span>
         </span>
       </button>
     </div>
