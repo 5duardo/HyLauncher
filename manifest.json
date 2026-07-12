@@ -1,5 +1,5 @@
 {
-  "packVersion": "1.2.8",
+  "packVersion": "1.2.9",
   "packName": "HyPack",
   "packDescription": "Modpack oficial — rendimiento, visuales y QoL",
   "minecraft": "1.20.1",
@@ -472,6 +472,15 @@
       "url": "https://cdn.modrinth.com/data/zJpHMkdD/versions/fSBijwCM/immersive-portals-5.2.0-mc1.20.1-fabric.jar",
       "sha1": "e0327d781901bb6f1caa72dde38846863cf53517",
       "size": 2934316,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "litewers-portal-gun",
+      "filename": "litewers-portal-gun-1.1.0+mc1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/wgBMtdW4/versions/PMaaIF6d/litewers-portal-gun-1.1.0%2Bmc1.20.1.jar",
+      "sha1": "53bc6ae275d4706f4d09018d8ccafb88ee426b3c",
+      "size": 1935712,
       "required": true,
       "side": "both"
     },
