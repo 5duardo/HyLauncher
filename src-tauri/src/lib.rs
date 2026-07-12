@@ -35,9 +35,50 @@ pub struct AppState {
 }
 
 // ---- Config Constants ----
-// TODO: Replace with your actual manifest URL
-const MANIFEST_URL: &str = "https://raw.githubusercontent.com/YOUR_USER/hypack/main/manifest.json";
+const MANIFEST_URL: &str =
+    "https://raw.githubusercontent.com/5duardo/HyLauncher/main/manifest.json";
 const MC_VERSION: &str = "1.20.1";
+
+fn resolve_bundled_manifest_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    // Installed app: resource dir next to the exe (NSIS copies resources here)
+    if let Ok(dir) = app.path().resource_dir() {
+        let p = dir.join("manifest.json");
+        if p.exists() {
+            return Some(p);
+        }
+        let p = dir.join("resources").join("manifest.json");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // Dev / cwd fallbacks
+    for candidate in [
+        "resources/manifest.json",
+        "../resources/manifest.json",
+        "manifest.json",
+        "../manifest.json",
+        "manifest-example.json",
+        "../manifest-example.json",
+    ] {
+        let p = std::path::PathBuf::from(candidate);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    let data = paths::launcher_data_dir().join("manifest.json");
+    if data.exists() {
+        return Some(data);
+    }
+
+    None
+}
+
+fn read_manifest_file(path: &std::path::Path) -> Result<PackManifest, LauncherError> {
+    let data = std::fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&data)?)
+}
 
 // ---- Settings ----
 
@@ -248,62 +289,38 @@ fn remove_account(state: State<'_, AppState>, account_id: String) -> Result<(), 
 #[tauri::command]
 async fn check_for_updates(
     state: State<'_, AppState>,
-    _app: AppHandle,
+    app: AppHandle,
 ) -> Result<Option<serde_json::Value>, LauncherError> {
     log::info!("Checking for updates from {}", MANIFEST_URL);
 
-    // Fetch remote manifest, with fallback to local manifest.json if using the placeholder URL
-    let remote: PackManifest = if MANIFEST_URL.contains("YOUR_USER") {
-        let fallback_path = if std::path::Path::new("manifest.json").exists() {
-            std::path::Path::new("manifest.json").to_path_buf()
-        } else if std::path::Path::new("../manifest.json").exists() {
-            std::path::Path::new("../manifest.json").to_path_buf()
-        } else if std::path::Path::new("manifest-example.json").exists() {
-            std::path::Path::new("manifest-example.json").to_path_buf()
-        } else if std::path::Path::new("../manifest-example.json").exists() {
-            std::path::Path::new("../manifest-example.json").to_path_buf()
-        } else {
-            paths::launcher_data_dir().join("manifest.json")
-        };
-
-        if fallback_path.exists() {
-            let data = std::fs::read_to_string(&fallback_path)?;
-            serde_json::from_str(&data)?
-        } else {
-            let dummy = PackManifest {
-                pack_version: "1.0.0".to_string(),
-                pack_name: "HyPack".to_string(),
-                pack_description: "Modpack de prueba (Modifica manifest.json)".to_string(),
-                minecraft: "1.20.1".to_string(),
-                fabric_loader: "0.19.3".to_string(),
-                base_url: "https://github.com".to_string(),
-                mods: vec![],
-                configs: vec![],
-                resource_packs: vec![],
-                shader_packs: vec![],
-                optional_resource_packs: vec![],
-                optional_shader_packs: vec![],
-                protected_paths: vec![],
-                server: modpack::manifest::ServerConfig {
-                    name: "Servidor".to_string(),
-                    address: "localhost".to_string(),
-                    port: 25565,
-                    auto_connect: false,
-                },
-                java: None,
-            };
-            let json = serde_json::to_string_pretty(&dummy)?;
-            std::fs::write(&fallback_path, json)?;
-            dummy
+    // Prefer remote pack list; fall back to bundled / local manifest (never invent an empty pack).
+    let remote: PackManifest = match http::download_json::<PackManifest>(&state.http_client, MANIFEST_URL).await {
+        Ok(manifest) if !manifest.mods.is_empty() => manifest,
+        Ok(empty) => {
+            log::warn!(
+                "Remote manifest has {} mods — trying bundled/local fallback",
+                empty.mods.len()
+            );
+            if let Some(path) = resolve_bundled_manifest_path(&app) {
+                log::info!("Loading bundled manifest from {}", path.display());
+                read_manifest_file(&path)?
+            } else if empty.mods.is_empty() {
+                return Err(LauncherError::Manifest(
+                    "El manifest remoto está vacío y no hay copia local".to_string(),
+                ));
+            } else {
+                empty
+            }
         }
-    } else {
-        match http::download_json(&state.http_client, MANIFEST_URL).await {
-            Ok(manifest) => manifest,
-            Err(e) => {
+        Err(e) => {
+            log::warn!("Remote manifest fetch failed: {e} — trying bundled/local fallback");
+            if let Some(path) = resolve_bundled_manifest_path(&app) {
+                log::info!("Loading bundled manifest from {}", path.display());
+                read_manifest_file(&path)?
+            } else {
                 let local_path = paths::local_manifest_file();
                 if local_path.exists() {
-                    let data = std::fs::read_to_string(&local_path)?;
-                    serde_json::from_str(&data)?
+                    read_manifest_file(&local_path)?
                 } else {
                     return Err(e);
                 }
@@ -314,8 +331,7 @@ async fn check_for_updates(
     // Load local manifest
     let local_path = paths::local_manifest_file();
     let local: Option<PackManifest> = if local_path.exists() {
-        let data = std::fs::read_to_string(&local_path)?;
-        serde_json::from_str(&data).ok()
+        read_manifest_file(&local_path).ok()
     } else {
         None
     };
