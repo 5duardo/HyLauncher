@@ -199,8 +199,10 @@ export interface UpdateDiff {
   modsToDownload: ModEntry[];
   modsToDelete: string[];
   configsToUpdate: ConfigEntry[];
-  resourcePacksToUpdate: ResourcePackEntry[];
-  shaderPacksToUpdate: ShaderPackEntry[];
+  resourcePacksToUpdate: number;
+  shaderPacksToUpdate: number;
   totalDownloadSize: number;
   isFullInstall: boolean;
+  /** none | manifest | content — backend skips downloads for manifest-only */
+  updateKind?: "none" | "manifest" | "content";
 }

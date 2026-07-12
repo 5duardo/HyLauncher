@@ -336,13 +336,22 @@ async fn check_for_updates(
         None
     };
 
-    // Compute diff
+    // Compute diff (fast-path skips hashing when only pack metadata changed)
     let update_diff = diff::compute_diff(&remote, local.as_ref()).await;
 
     if update_diff.is_empty() {
-        // Save manifest as up-to-date
+        // Nada que descargar: refrescar local-manifest (incluye updates solo de packVersion)
         let json = serde_json::to_string_pretty(&remote)?;
+        if let Some(parent) = local_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
         std::fs::write(&local_path, json)?;
+
+        log::info!(
+            "Update check done: kind={:?}, pack v{}",
+            update_diff.update_kind,
+            remote.pack_version
+        );
 
         *state.cached_manifest.lock().unwrap() = Some(remote);
         *state.cached_diff.lock().unwrap() = None;
@@ -370,7 +379,14 @@ async fn check_for_updates(
         "shaderPacksToUpdate": update_diff.shader_packs_to_update.len(),
         "totalDownloadSize": update_diff.total_download_size,
         "isFullInstall": update_diff.is_full_install,
+        "updateKind": update_diff.update_kind,
     });
+
+    log::info!(
+        "Update check: kind=Content, download {} mods (~{} bytes)",
+        update_diff.mods_to_download.len(),
+        update_diff.total_download_size
+    );
 
     *state.cached_manifest.lock().unwrap() = Some(remote);
     *state.cached_diff.lock().unwrap() = Some(update_diff);
