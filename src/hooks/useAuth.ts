@@ -133,11 +133,14 @@ export function useAuth() {
   const removeAccount = useCallback(async (accountId: string) => {
     try {
       await cmd.removeAccount(accountId);
+      const [accounts, active] = await Promise.all([
+        cmd.getAccounts(),
+        cmd.getActiveAccount(),
+      ]);
       setState((s) => ({
         ...s,
-        accounts: s.accounts.filter((a) => a.id !== accountId),
-        activeAccount:
-          s.activeAccount?.id === accountId ? null : s.activeAccount,
+        accounts,
+        activeAccount: active,
       }));
     } catch (err) {
       setState((s) => ({ ...s, error: String(err) }));

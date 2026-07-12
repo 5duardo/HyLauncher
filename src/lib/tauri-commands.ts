@@ -129,6 +129,19 @@ export async function saveSettings(settings: LauncherSettings): Promise<void> {
   return invoke("save_settings", { settings });
 }
 
+/** Update Discord Rich Presence */
+export async function updateDiscordPresence(
+  details: string,
+  presenceState: string
+): Promise<void> {
+  return invoke("update_discord_presence", { details, presenceState });
+}
+
+/** Clear Discord Rich Presence */
+export async function clearDiscordPresence(): Promise<void> {
+  return invoke("clear_discord_presence");
+}
+
 // ---- Window Controls ----
 
 export async function minimizeWindow(): Promise<void> {

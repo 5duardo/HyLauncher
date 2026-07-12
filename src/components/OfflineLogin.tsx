@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { FaBolt } from "react-icons/fa";
+import { useI18n } from "../lib/i18n";
 
 interface OfflineLoginProps {
   onSubmit: (username: string) => void;
@@ -11,6 +12,7 @@ interface OfflineLoginProps {
 }
 
 export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
+  const { t } = useI18n();
   const [username, setUsername] = useState("");
 
   const isValid =
@@ -28,7 +30,7 @@ export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
   return (
     <form onSubmit={handleSubmit}>
       <div className="input-group">
-        <label htmlFor="offline-username">Nombre de usuario</label>
+        <label htmlFor="offline-username">{t("offline.username")}</label>
         <input
           id="offline-username"
           type="text"
@@ -42,10 +44,10 @@ export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
           spellCheck={false}
         />
         <p className="input-hint">
-          3–16 caracteres. Solo letras, números y guion bajo.
+          {t("offline.rules")}
           {username.length > 0 && !isValid && (
             <span style={{ color: "var(--color-error)", marginLeft: "8px" }}>
-              Nombre inválido
+              {t("offline.invalid")}
             </span>
           )}
         </p>
@@ -59,12 +61,12 @@ export function OfflineLogin({ onSubmit, isLoading }: OfflineLoginProps) {
       >
         {isLoading ? (
           <>
-            <span className="spinner" /> Guardando...
+            <span className="spinner" /> {t("offline.saving")}
           </>
         ) : (
           <>
             <FaBolt size={12} style={{ marginRight: 6 }} />
-            Entrar como Offline
+            {t("offline.enter")}
           </>
         )}
       </button>

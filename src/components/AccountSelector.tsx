@@ -9,6 +9,7 @@ import { MicrosoftLogin } from "./MicrosoftLogin";
 import { OfflineLogin } from "./OfflineLogin";
 import { AccountAvatar } from "./AccountAvatar";
 import type { DeviceCodeResponse } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface AccountSelectorProps {
   activeAccount: Account | null;
@@ -31,6 +32,7 @@ export function AccountSelector({
   isLoading,
   onLogout,
 }: AccountSelectorProps) {
+  const { t } = useI18n();
   const [showModal, setShowModal] = useState(false);
 
   if (activeAccount) {
@@ -39,48 +41,47 @@ export function AccountSelector({
         className="account-card"
         onClick={() => setShowModal(true)}
         id="account-selector"
-        style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingRight: '10px' }}
+        style={{ display: "flex", alignItems: "center", gap: "10px", paddingRight: "10px" }}
       >
         <div className="account-avatar">
           <AccountAvatar account={activeAccount} size={36} />
         </div>
-        <div className="account-info" style={{ marginRight: '4px' }}>
+        <div className="account-info" style={{ marginRight: "4px" }}>
           <span className="account-name">{activeAccount.username}</span>
           <span className="account-type">
             <span
               className={`badge ${
-                activeAccount.mode === "premium"
-                  ? "badge--premium"
-                  : "badge--offline"
+                activeAccount.mode === "premium" ? "badge--premium" : "badge--offline"
               }`}
             >
               {activeAccount.mode === "premium" ? "Premium" : "Offline"}
             </span>
           </span>
         </div>
-        
-        {/* Logout Button directly inside mini profile */}
+
         <button
           className="logout-btn"
           style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--color-text-muted)',
-            cursor: 'pointer',
-            padding: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.2s',
-            marginLeft: 'auto'
+            background: "transparent",
+            border: "none",
+            color: "var(--color-text-muted)",
+            cursor: "pointer",
+            padding: "4px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "color 0.2s",
+            marginLeft: "auto",
           }}
           onClick={(e) => {
-            e.stopPropagation(); // Don't trigger showing LoginModal
+            e.stopPropagation();
             onLogout();
           }}
-          title="Cerrar sesión"
-          onMouseOver={(e) => e.currentTarget.style.color = '#ef4444'}
-          onMouseOut={(e) => e.currentTarget.style.color = 'var(--color-text-muted)'}
+          title={t("account.logout")}
+          onMouseOver={(e) => (e.currentTarget.style.color = "#ef4444")}
+          onMouseOut={(e) =>
+            (e.currentTarget.style.color = "var(--color-text-muted)")
+          }
         >
           <FaSignOutAlt size={14} />
         </button>
@@ -97,8 +98,8 @@ export function AccountSelector({
       >
         <div className="account-avatar">?</div>
         <div className="account-info">
-          <span className="account-name">Iniciar sesión</span>
-          <span className="account-type">Haz clic para entrar</span>
+          <span className="account-name">{t("account.signIn")}</span>
+          <span className="account-type">{t("account.clickToEnter")}</span>
         </div>
       </button>
 
@@ -128,8 +129,6 @@ export function AccountSelector({
   );
 }
 
-// ---- Login Modal ----
-
 interface LoginModalProps {
   activeAccount: Account | null;
   onLogout: () => void;
@@ -153,54 +152,82 @@ function LoginModal({
   isPolling,
   isLoading,
 }: LoginModalProps) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<"premium" | "offline">("offline");
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{activeAccount ? "Gestionar Cuenta" : "Iniciar Sesión"}</h3>
+          <h3>{activeAccount ? t("account.manage") : t("account.signInTitle")}</h3>
           <button className="modal-close" onClick={onClose}>
             <FaTimes size={12} />
           </button>
         </div>
         <div className="modal-body">
           {activeAccount && (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              padding: '16px',
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              <div className="account-avatar" style={{ width: 48, height: 48, marginBottom: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: "16px",
+                background: "rgba(255, 255, 255, 0.02)",
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius-md)",
+                marginBottom: "20px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                className="account-avatar"
+                style={{ width: 48, height: 48, marginBottom: 12 }}
+              >
                 <AccountAvatar account={activeAccount} size={48} />
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Sesión Activa</span>
-              <span style={{ fontSize: '18px', fontWeight: 700, color: 'white', margin: '4px 0 12px' }}>{activeAccount.username}</span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  color: "var(--color-text-muted)",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                }}
+              >
+                {t("account.activeSession")}
+              </span>
+              <span
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 700,
+                  color: "white",
+                  margin: "4px 0 12px",
+                }}
+              >
+                {activeAccount.username}
+              </span>
               <button
                 className="btn"
                 style={{
-                  width: '100%',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#ef4444',
-                  padding: '8px 16px',
-                  borderRadius: 'var(--radius-md)',
+                  width: "100%",
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  color: "#ef4444",
+                  padding: "8px 16px",
+                  borderRadius: "var(--radius-md)",
                   fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s'
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
                 }}
                 onClick={onLogout}
-                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)")
+                }
               >
-                Cerrar Sesión
+                {t("account.logoutBtn")}
               </button>
             </div>
           )}

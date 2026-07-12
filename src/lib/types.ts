@@ -160,6 +160,8 @@ export interface LauncherSettings {
   instancePath?: string;
   theme: "dark";
   language: string;
+  discordRpcEnabled?: boolean;
+  discordClientId?: string;
 }
 
 /** Update diff result */

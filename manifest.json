@@ -1,5 +1,5 @@
 {
-  "packVersion": "1.1.2",
+  "packVersion": "1.2.0",
   "packName": "HyPack",
   "packDescription": "Modpack oficial del servidor HyServer — rendimiento, visuales y QoL",
   "minecraft": "1.20.1",
@@ -337,6 +337,123 @@
       "url": "https://cdn.modrinth.com/data/POQ2i9zu/versions/6hhOJ747/friendsandfoes-fabric-mc1.20.1-3.0.9.jar",
       "sha1": "6a062ac17b5eb26667b07662354c4d7ec0a45500",
       "size": 3615166,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "chat-heads",
+      "filename": "chat_heads-0.15.2-fabric-1.20.jar",
+      "url": "https://cdn.modrinth.com/data/Wb5oqrBJ/versions/4DCqnKS0/chat_heads-0.15.2-fabric-1.20.jar",
+      "sha1": "9a173e1a092637a67aa31c6de7d0e77ab3eb8f3c",
+      "size": 84255,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "libipn",
+      "filename": "libIPN-fabric-1.20-4.0.2.jar",
+      "url": "https://cdn.modrinth.com/data/onSQdWhM/versions/Uygzs3iI/libIPN-fabric-1.20-4.0.2.jar",
+      "sha1": "c8c4d93037efb226b6bd3264e33df4c010cb111b",
+      "size": 702814,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "inventory-profiles-next",
+      "filename": "InventoryProfilesNext-fabric-1.20-1.10.20.jar",
+      "url": "https://cdn.modrinth.com/data/O7RBXm3n/versions/ZTQIr2Z9/InventoryProfilesNext-fabric-1.20-1.10.20.jar",
+      "sha1": "e45676c4193d69b0eb0ebdb7881a6daeb36a9b5e",
+      "size": 1455143,
+      "required": true,
+      "side": "client"
+    },
+    {
+      "id": "terrablender",
+      "filename": "TerraBlender-fabric-1.20.1-3.0.1.10.jar",
+      "url": "https://cdn.modrinth.com/data/kkmrDlKT/versions/J1S3aA8i/TerraBlender-fabric-1.20.1-3.0.1.10.jar",
+      "sha1": "14ba207a885b621b92a79bc913abcb4108a77ac4",
+      "size": 322358,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "bclib",
+      "filename": "bclib-3.0.14.jar",
+      "url": "https://cdn.modrinth.com/data/BgNRHReB/versions/TPC86Pyz/bclib-3.0.14.jar",
+      "sha1": "34be724165bfe1207542f26551b10925d099eee1",
+      "size": 2312835,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "betternether",
+      "filename": "better-nether-9.0.10.jar",
+      "url": "https://cdn.modrinth.com/data/MpzVLzy5/versions/IG7kgtJH/better-nether-9.0.10.jar",
+      "sha1": "7247c4b3f319f828205fc9f195261c46a24280ec",
+      "size": 22981698,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "betterend",
+      "filename": "better-end-4.0.11.jar",
+      "url": "https://cdn.modrinth.com/data/gc8OEnCC/versions/7QwyTILr/better-end-4.0.11.jar",
+      "sha1": "1e54364d63245a51e66e414ca73efbac9e05f11d",
+      "size": 92544800,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "geckolib",
+      "filename": "geckolib-fabric-1.20.1-4.8.4.jar",
+      "url": "https://cdn.modrinth.com/data/8BmcQJ2H/versions/SD2lOScS/geckolib-fabric-1.20.1-4.8.4.jar",
+      "sha1": "c9a5016380d6d17134bc7322f4d67d6e9cbf4c68",
+      "size": 969016,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "naturalist",
+      "filename": "naturalist-5.0pre3+fabric-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/F8BQNPWX/versions/tx891fzz/naturalist-5.0pre3%2Bfabric-1.20.1.jar",
+      "sha1": "64e82b5d2a2f57c6888b5c307959c5630015262a",
+      "size": 4770347,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "quartz-elevator",
+      "filename": "quartz-elevator-2.2.6+1.20.jar",
+      "url": "https://cdn.modrinth.com/data/O9C0qdu8/versions/j00Bd0o2/quartz-elevator-2.2.6%2B1.20.jar",
+      "sha1": "be9adf21b88859c7f3ad223c513af4b30d7bd507",
+      "size": 1053505,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "automobility",
+      "filename": "automobility-0.4.2+1.20.1-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/rqIsPf9F/versions/G97BY8OB/automobility-0.4.2%2B1.20.1-fabric.jar",
+      "sha1": "c820b82890d0192ccf1e8bc05d1ff081bc5954b7",
+      "size": 1108056,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "dungeons-and-taverns",
+      "filename": "dungeons-and-taverns-3.0.3.f.jar",
+      "url": "https://cdn.modrinth.com/data/tpehi7ww/versions/d1sY0JqV/dungeons-and-taverns-3.0.3.f.jar",
+      "sha1": "b1b86b4615d078fb592e9f067c94f9f97c6e2f25",
+      "size": 13161726,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "guns-plusplus",
+      "filename": "guns++-4.2.jar",
+      "url": "https://cdn.modrinth.com/data/kdch0Jxf/versions/Oo7Fn01r/guns%2B%2B-4.2.jar",
+      "sha1": "896392515b35826f638154b46a36ef0c8fb0467c",
+      "size": 36771615,
       "required": true,
       "side": "both"
     }

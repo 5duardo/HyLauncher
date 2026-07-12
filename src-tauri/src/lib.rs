@@ -3,11 +3,13 @@
 // ============================================================
 
 mod auth;
+mod discord;
 mod minecraft;
 mod modpack;
 mod utils;
 
 use auth::{account_store::{AccountStore, StoredAccount, now_secs}, microsoft, offline};
+use discord::DiscordRpc;
 use minecraft::{fabric, java_manager, launcher, version_manifest};
 use modpack::{diff, downloader, manifest::PackManifest, modrinth};
 use utils::{error::LauncherError, http, paths};
@@ -26,6 +28,7 @@ pub struct AppState {
     pub cached_diff: Mutex<Option<diff::UpdateDiff>>,
     pub cached_version_json: Mutex<Option<version_manifest::VersionJson>>,
     pub cached_fabric_profile: Mutex<Option<fabric::FabricProfile>>,
+    pub discord_rpc: Mutex<DiscordRpc>,
 }
 
 // ---- Config Constants ----
@@ -45,6 +48,14 @@ pub struct LauncherSettings {
     pub instance_path: Option<String>,
     pub theme: String,
     pub language: String,
+    #[serde(default = "default_true", rename = "discordRpcEnabled")]
+    pub discord_rpc_enabled: bool,
+    #[serde(default, rename = "discordClientId")]
+    pub discord_client_id: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for LauncherSettings {
@@ -55,6 +66,8 @@ impl Default for LauncherSettings {
             instance_path: None,
             theme: "dark".to_string(),
             language: "es".to_string(),
+            discord_rpc_enabled: true,
+            discord_client_id: std::env::var("DISCORD_CLIENT_ID").unwrap_or_default(),
         }
     }
 }
@@ -221,9 +234,13 @@ async fn check_for_updates(
 ) -> Result<Option<serde_json::Value>, LauncherError> {
     log::info!("Checking for updates from {}", MANIFEST_URL);
 
-    // Fetch remote manifest, with fallback to local manifest-example.json if using the placeholder URL
+    // Fetch remote manifest, with fallback to local manifest.json if using the placeholder URL
     let remote: PackManifest = if MANIFEST_URL.contains("YOUR_USER") {
-        let fallback_path = if std::path::Path::new("manifest-example.json").exists() {
+        let fallback_path = if std::path::Path::new("manifest.json").exists() {
+            std::path::Path::new("manifest.json").to_path_buf()
+        } else if std::path::Path::new("../manifest.json").exists() {
+            std::path::Path::new("../manifest.json").to_path_buf()
+        } else if std::path::Path::new("manifest-example.json").exists() {
             std::path::Path::new("manifest-example.json").to_path_buf()
         } else if std::path::Path::new("../manifest-example.json").exists() {
             std::path::Path::new("../manifest-example.json").to_path_buf()
@@ -238,7 +255,7 @@ async fn check_for_updates(
             let dummy = PackManifest {
                 pack_version: "1.0.0".to_string(),
                 pack_name: "HyPack".to_string(),
-                pack_description: "Modpack de prueba (Modifica manifest-example.json)".to_string(),
+                pack_description: "Modpack de prueba (Modifica manifest.json)".to_string(),
                 minecraft: "1.20.1".to_string(),
                 fabric_loader: "0.19.3".to_string(),
                 base_url: "https://github.com".to_string(),
@@ -564,17 +581,63 @@ async fn install_java(
 
 #[tauri::command]
 fn get_settings() -> LauncherSettings {
-    load_settings()
+    let mut settings = load_settings();
+    if settings.discord_client_id.trim().is_empty() {
+        if let Ok(id) = std::env::var("DISCORD_CLIENT_ID") {
+            if !id.trim().is_empty() {
+                settings.discord_client_id = id.trim().to_string();
+            }
+        }
+    }
+    settings
 }
 
 #[tauri::command]
-fn save_settings(settings: LauncherSettings) -> Result<(), LauncherError> {
+fn save_settings(
+    state: State<'_, AppState>,
+    settings: LauncherSettings,
+) -> Result<(), LauncherError> {
     let path = paths::settings_file();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(&settings)?;
     std::fs::write(&path, json)?;
+
+    if !settings.discord_rpc_enabled {
+        if let Ok(mut rpc) = state.discord_rpc.lock() {
+            rpc.clear();
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn update_discord_presence(
+    state: State<'_, AppState>,
+    details: String,
+    presence_state: String,
+) -> Result<(), String> {
+    let settings = load_settings();
+    let mut client_id = settings.discord_client_id.trim().to_string();
+    if client_id.is_empty() {
+        client_id = std::env::var("DISCORD_CLIENT_ID").unwrap_or_default();
+    }
+
+    let mut rpc = state.discord_rpc.lock().map_err(|e| e.to_string())?;
+    rpc.update(
+        settings.discord_rpc_enabled,
+        client_id.trim(),
+        &details,
+        &presence_state,
+    )
+}
+
+#[tauri::command]
+fn clear_discord_presence(state: State<'_, AppState>) -> Result<(), String> {
+    let mut rpc = state.discord_rpc.lock().map_err(|e| e.to_string())?;
+    rpc.clear();
     Ok(())
 }
 
@@ -797,6 +860,7 @@ pub fn run() {
             cached_diff: Mutex::new(None),
             cached_version_json: Mutex::new(None),
             cached_fabric_profile: Mutex::new(None),
+            discord_rpc: Mutex::new(DiscordRpc::new()),
         })
         .invoke_handler(tauri::generate_handler![
             // Auth
@@ -825,6 +889,8 @@ pub fn run() {
             // Settings
             get_settings,
             save_settings,
+            update_discord_presence,
+            clear_discord_presence,
             // Window
             minimize_window,
             toggle_maximize_window,

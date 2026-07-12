@@ -55,6 +55,7 @@ fastnbt = "2"
 
 # Futures / async utilities
 futures = "0.3"
+discord-rich-presence = "1.1.0"
 
 [features]
 default = ["custom-protocol"]

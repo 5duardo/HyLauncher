@@ -2824,11 +2824,17 @@ button.hy-meta-item:hover {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  color: white;
+  color: var(--color-text-primary);
   font-size: 13px;
   font-family: var(--font-body);
   outline: none;
   transition: border-color var(--transition-fast);
+  color-scheme: dark;
+}
+
+.settings-select option {
+  background: #16141f;
+  color: var(--color-text-primary);
 }
 
 .settings-input:focus,
@@ -2838,6 +2844,289 @@ button.hy-meta-item:hover {
 
 .settings-input::placeholder {
   color: var(--color-text-muted);
+}
+
+/* Custom language dropdown — avoids native <option> light theme on Windows */
+.lang-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.lang-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.lang-dropdown-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lang-dropdown--open .lang-dropdown-trigger {
+  border-color: rgba(172, 84, 246, 0.45);
+  background: rgba(172, 84, 246, 0.08);
+}
+
+.lang-dropdown-chevron {
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.lang-dropdown--open .lang-dropdown-chevron {
+  transform: rotate(180deg);
+  color: var(--color-text-accent);
+}
+
+.lang-dropdown-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: #16141f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.lang-dropdown-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.lang-dropdown-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.lang-dropdown-option--active {
+  background: rgba(172, 84, 246, 0.16);
+  color: #e8d4ff;
+}
+
+.lang-dropdown-option--active:hover {
+  background: rgba(172, 84, 246, 0.22);
+}
+
+.settings-account-card,
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.settings-account-row {
+  padding: 10px 12px;
+}
+
+.settings-account-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-account-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.settings-account-avatar--sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.settings-account-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-account-meta strong {
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.settings-account-meta span,
+.settings-account-empty span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.settings-account-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.settings-account-empty {
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-account-empty p {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.settings-toggle-row strong {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.settings-toggle-row span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.settings-toggle {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.settings-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--transition-fast);
+}
+
+.settings-toggle:checked {
+  background: rgba(172, 84, 246, 0.7);
+  border-color: rgba(172, 84, 246, 0.5);
+}
+
+.settings-toggle:checked::after {
+  transform: translateX(18px);
+}
+
+.settings-field-label {
+  display: block;
+  margin: 16px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-discord-preview {
+  margin-bottom: 4px;
+}
+
+.settings-discord-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.settings-discord-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-discord-preview-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.settings-discord-preview-card strong {
+  display: block;
+  font-size: 13px;
+  color: #f2f3f5;
+}
+
+.settings-discord-preview-card span,
+.settings-discord-preview-card em {
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  color: #b5bac1;
+  margin-top: 2px;
 }
 
 .settings-hint {

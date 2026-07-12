@@ -28,9 +28,12 @@ import { useAuth } from "./hooks/useAuth";
 import { useModpack } from "./hooks/useModpack";
 import { useLaunch } from "./hooks/useLaunch";
 import { useModIcons } from "./hooks/useModIcons";
+import { useI18n } from "./lib/i18n";
+import { useDiscordPresence } from "./hooks/useDiscordPresence";
 import * as cmd from "./lib/tauri-commands";
 
 export default function App() {
+  const { t, locale } = useI18n();
   const auth = useAuth();
   const modpack = useModpack();
   const launch = useLaunch();
@@ -41,6 +44,13 @@ export default function App() {
   const [installedShaders, setInstalledShaders] = useState<Record<string, boolean>>({});
   const [optionalInstalling, setOptionalInstalling] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
+
+  useDiscordPresence({
+    launcherState: launch.launcherState,
+    username: auth.activeAccount?.username,
+    serverName: modpack.manifest?.server.name ?? "HyServer",
+    language: locale,
+  });
 
   const checkOptionalPacks = async () => {
     if (!modpack.manifest) return;
@@ -202,16 +212,16 @@ export default function App() {
         <span className="titlebar-title">
           <img src="/logo.png" alt="" className="titlebar-logo" aria-hidden="true" />
           {launch.launcherState === "running"
-            ? "HyLauncher — Jugando"
+            ? t("title.playing")
             : activeTab === "play"
-            ? "HyLauncher — Jugar"
-            : `HyLauncher — Mods (${mods.length})`}
+            ? t("title.play")
+            : t("title.mods", { count: mods.length })}
         </span>
         <div className="titlebar-controls">
           <button
             className="titlebar-btn"
             onClick={() => cmd.minimizeWindow()}
-            title="Minimizar"
+            title={t("title.minimize")}
           >
             <FaMinus size={10} />
           </button>
@@ -221,14 +231,14 @@ export default function App() {
               const maximized = await cmd.toggleMaximizeWindow();
               setIsMaximized(maximized);
             }}
-            title={isMaximized ? "Restaurar" : "Maximizar"}
+            title={isMaximized ? t("title.restore") : t("title.maximize")}
           >
             {isMaximized ? <FaWindowRestore size={10} /> : <FaSquare size={10} />}
           </button>
           <button
             className="titlebar-btn close"
             onClick={() => cmd.closeWindow()}
-            title="Cerrar"
+            title={t("title.close")}
           >
             <FaTimes size={11} />
           </button>
@@ -246,7 +256,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'play' ? 'active' : ''}`}
               onClick={() => setActiveTab('play')}
-              title="Jugar"
+              title={t("nav.play")}
             >
               <FaGamepad size={20} />
             </button>
@@ -254,7 +264,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'mods' ? 'active' : ''}`}
               onClick={() => setActiveTab('mods')}
-              title="Mods"
+              title={t("nav.mods")}
             >
               <FaCube size={20} />
             </button>
@@ -262,7 +272,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'textures' ? 'active' : ''}`}
               onClick={() => setActiveTab('textures')}
-              title="Texturas"
+              title={t("nav.textures")}
             >
               <FaLayerGroup size={20} />
             </button>
@@ -270,7 +280,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'shaders' ? 'active' : ''}`}
               onClick={() => setActiveTab('shaders')}
-              title="Shaders"
+              title={t("nav.shaders")}
             >
               <FaMagic size={20} />
             </button>
@@ -280,7 +290,7 @@ export default function App() {
             <button
               className="sidebar-footer-item"
               onClick={() => setShowSettings(true)}
-              title="Ajustes"
+              title={t("nav.settings")}
             >
               <FaCog size={20} />
             </button>
@@ -293,9 +303,9 @@ export default function App() {
           <header className="header">
             {activeTab === "play" ? (
               <div className="lunar-welcome">
-                <span className="lunar-welcome-text">Bienvenido de vuelta,</span>
+                <span className="lunar-welcome-text">{t("welcome.back")}</span>
                 <span className="lunar-welcome-user">
-                  {auth.activeAccount?.username ?? "Jugador"}
+                  {auth.activeAccount?.username ?? t("welcome.player")}
                   {auth.activeAccount && <span className="lunar-status-dot" />}
                 </span>
               </div>
@@ -304,17 +314,17 @@ export default function App() {
               <div className="brand-text">
                 <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700 }}>
                   {activeTab === "mods" 
-                    ? "Listado de Mods" 
+                    ? t("mods.listTitle")
                     : activeTab === "textures" 
-                    ? "Packs de Texturas" 
-                    : "Packs de Shaders"}
+                    ? t("textures.listTitle")
+                    : t("shaders.listTitle")}
                 </h1>
                 <span className="version" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                   {activeTab === "mods"
-                    ? `Sincronizados con el servidor (${mods.length} en total)`
+                    ? t("mods.listSubtitle", { count: mods.length })
                     : activeTab === "textures"
-                    ? `Opciones de apariencia (${optionalResourcePacks.length} disponibles)`
-                    : `Efectos visuales avanzados (${optionalShaderPacks.length} disponibles)`
+                    ? t("textures.listSubtitle", { count: optionalResourcePacks.length })
+                    : t("shaders.listSubtitle", { count: optionalShaderPacks.length })
                   }
                 </span>
               </div>
@@ -352,7 +362,9 @@ export default function App() {
             launch.launcherState !== "downloading" && (
               <StatusBanner
                 type="info"
-                message={`Actualización disponible: ${modpack.updateDiff.modsToDownload.length} mods por descargar`}
+                message={t("banner.update", {
+                  count: modpack.updateDiff.modsToDownload.length,
+                })}
               />
             )}
 
@@ -363,7 +375,7 @@ export default function App() {
               modsCount={mods.length}
               missingMods={modpack.updateDiff?.modsToDownload.length ?? 0}
               launcherState={launch.launcherState}
-              username={auth.activeAccount?.username ?? "Jugador"}
+              username={auth.activeAccount?.username ?? t("welcome.player")}
               showProgress={showProgress}
               progress={modpack.progress}
               progressLabel={modpack.progressLabel}
@@ -387,7 +399,7 @@ export default function App() {
                   <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
-                    placeholder="Buscar mods..."
+                    placeholder={t("mods.search")}
                     className="mods-search-input"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -404,19 +416,23 @@ export default function App() {
                     {modpack.isUpdating ? (
                       <>
                         <span className="spinner" />
-                        <span>Instalando... ({modpack.progressPercent}%)</span>
+                        <span>{t("mods.installing", { percent: modpack.progressPercent })}</span>
                       </>
                     ) : (
                       <>
                         <FaDownload size={14} />
-                        <span>Instalar Mods ({modpack.updateDiff.modsToDownload.length})</span>
+                        <span>
+                          {t("mods.installCount", {
+                            count: modpack.updateDiff.modsToDownload.length,
+                          })}
+                        </span>
                       </>
                     )}
                   </button>
                 ) : (
                   <div className="btn btn--status btn--bar">
                     <FaCheck size={14} />
-                    <span>Mods al día</span>
+                    <span>{t("mods.upToDate")}</span>
                   </div>
                 )}
               </div>
@@ -447,12 +463,12 @@ export default function App() {
                       </colgroup>
                       <thead>
                         <tr>
-                          <th>Mod</th>
-                          <th>Archivo</th>
-                          <th>Tamaño</th>
-                          <th>Tipo</th>
-                          <th>Lado</th>
-                          <th style={{ textAlign: 'right' }}>Estado</th>
+                          <th>{t("mods.col.mod")}</th>
+                          <th>{t("mods.col.file")}</th>
+                          <th>{t("mods.col.size")}</th>
+                          <th>{t("mods.col.type")}</th>
+                          <th>{t("mods.col.side")}</th>
+                          <th style={{ textAlign: 'right' }}>{t("mods.col.status")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -477,7 +493,7 @@ export default function App() {
                             </td>
                             <td>
                               <span className={`mod-badge ${mod.required ? 'mod-badge--required' : 'mod-badge--optional'}`}>
-                                {mod.required ? "Requerido" : "Opcional"}
+                                {mod.required ? t("mods.required") : t("mods.optional")}
                               </span>
                             </td>
                             <td>
@@ -499,7 +515,7 @@ export default function App() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
                   <FaSearch size={32} />
-                  <span>No se encontraron mods que coincidan con la búsqueda</span>
+                  <span>{t("mods.empty")}</span>
                 </div>
               )}
             </div>
@@ -513,7 +529,7 @@ export default function App() {
                   <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
-                    placeholder="Buscar texturas..."
+                    placeholder={t("textures.search")}
                     className="mods-search-input"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -534,10 +550,10 @@ export default function App() {
                       </colgroup>
                       <thead>
                         <tr>
-                          <th>Textura</th>
-                          <th>Archivo</th>
-                          <th>Tamaño</th>
-                          <th style={{ textAlign: 'right' }}>Acción</th>
+                          <th>{t("textures.col.name")}</th>
+                          <th>{t("mods.col.file")}</th>
+                          <th>{t("mods.col.size")}</th>
+                          <th style={{ textAlign: 'right' }}>{t("textures.col.action")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -572,12 +588,12 @@ export default function App() {
                                   {isInstalling ? (
                                     <>
                                       <span className="spinner" />
-                                      <span>Instalando...</span>
+                                      <span>{t("action.installing")}</span>
                                     </>
                                   ) : isInstalled ? (
-                                    <span>Desinstalar</span>
+                                    <span>{t("action.uninstall")}</span>
                                   ) : (
-                                    <span>Instalar</span>
+                                    <span>{t("action.install")}</span>
                                   )}
                                 </button>
                               </td>
@@ -591,7 +607,7 @@ export default function App() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
                   <FaSearch size={32} />
-                  <span>No se encontraron texturas</span>
+                  <span>{t("textures.empty")}</span>
                 </div>
               )}
             </div>
@@ -605,7 +621,7 @@ export default function App() {
                   <FaSearch size={14} className="mods-search-icon" />
                   <input
                     type="text"
-                    placeholder="Buscar shaders..."
+                    placeholder={t("shaders.search")}
                     className="mods-search-input"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -626,10 +642,10 @@ export default function App() {
                       </colgroup>
                       <thead>
                         <tr>
-                          <th>Shader</th>
-                          <th>Archivo</th>
-                          <th>Tamaño</th>
-                          <th style={{ textAlign: 'right' }}>Acción</th>
+                          <th>{t("shaders.col.name")}</th>
+                          <th>{t("mods.col.file")}</th>
+                          <th>{t("mods.col.size")}</th>
+                          <th style={{ textAlign: 'right' }}>{t("textures.col.action")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -664,12 +680,12 @@ export default function App() {
                                   {isInstalling ? (
                                     <>
                                       <span className="spinner" />
-                                      <span>Instalando...</span>
+                                      <span>{t("action.installing")}</span>
                                     </>
                                   ) : isInstalled ? (
-                                    <span>Desinstalar</span>
+                                    <span>{t("action.uninstall")}</span>
                                   ) : (
-                                    <span>Instalar</span>
+                                    <span>{t("action.install")}</span>
                                   )}
                                 </button>
                               </td>
@@ -683,7 +699,7 @@ export default function App() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
                   <FaSearch size={32} />
-                  <span>No se encontraron shaders</span>
+                  <span>{t("shaders.empty")}</span>
                 </div>
               )}
             </div>
@@ -693,7 +709,14 @@ export default function App() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          activeAccount={auth.activeAccount}
+          accounts={auth.accounts}
+          onLogout={auth.logout}
+          onSelectAccount={auth.selectAccount}
+          onRemoveAccount={auth.removeAccount}
+        />
       )}
     </div>
   );

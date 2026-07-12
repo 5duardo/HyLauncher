@@ -9,6 +9,7 @@ import {
   FaStop,
   FaUser,
 } from "react-icons/fa";
+import { useI18n } from "../lib/i18n";
 import * as cmd from "../lib/tauri-commands";
 
 interface GameRunningPanelProps {
@@ -24,32 +25,31 @@ export function GameRunningPanel({
   onStopGame,
   isStopping = false,
 }: GameRunningPanelProps) {
+  const { t } = useI18n();
+
   return (
     <div className="hy-running">
       <header className="hy-running-header">
         <div className="hy-running-live">
           <span className="hy-running-dot" />
-          En juego
+          {t("running.live")}
         </div>
         <div>
-          <h2 className="hy-running-title">Minecraft está abierto</h2>
-          <p className="hy-running-lead">
-            El launcher quedó minimizado. Puedes volver aquí cuando quieras o
-            cerrar el proceso de Minecraft.
-          </p>
+          <h2 className="hy-running-title">{t("running.title")}</h2>
+          <p className="hy-running-lead">{t("running.lead")}</p>
         </div>
       </header>
 
       <div className="hy-running-grid">
         <section className="hy-running-card">
-          <p className="hy-running-card-label">Sesión</p>
+          <p className="hy-running-card-label">{t("running.session")}</p>
           <div className="hy-running-row">
             <span className="hy-running-row-icon">
               <FaUser size={14} />
             </span>
             <div>
               <strong>{username}</strong>
-              <em>Jugador activo</em>
+              <em>{t("running.activePlayer")}</em>
             </div>
           </div>
           <div className="hy-running-row">
@@ -58,7 +58,7 @@ export function GameRunningPanel({
             </span>
             <div>
               <strong>{serverName}</strong>
-              <em>Servidor del pack</em>
+              <em>{t("running.packServer")}</em>
             </div>
           </div>
           <div className="hy-running-row">
@@ -66,14 +66,14 @@ export function GameRunningPanel({
               <FaDesktop size={14} />
             </span>
             <div>
-              <strong>Ventana de juego</strong>
-              <em>Proceso de Minecraft en segundo plano</em>
+              <strong>{t("running.gameWindow")}</strong>
+              <em>{t("running.gameBg")}</em>
             </div>
           </div>
         </section>
 
         <section className="hy-running-card hy-running-card--actions">
-          <p className="hy-running-card-label">Controles</p>
+          <p className="hy-running-card-label">{t("running.controls")}</p>
 
           <button
             type="button"
@@ -84,12 +84,12 @@ export function GameRunningPanel({
             {isStopping ? (
               <>
                 <span className="spinner" />
-                Cerrando...
+                {t("running.stopping")}
               </>
             ) : (
               <>
                 <FaStop size={14} />
-                Cerrar juego
+                {t("running.stop")}
               </>
             )}
           </button>
@@ -101,13 +101,10 @@ export function GameRunningPanel({
             disabled={isStopping}
           >
             <FaExternalLinkAlt size={13} />
-            Abrir launcher
+            {t("running.openLauncher")}
           </button>
 
-          <p className="hy-running-note">
-            Cerrar juego finaliza el proceso de Minecraft. Abrir launcher solo
-            restaura esta ventana.
-          </p>
+          <p className="hy-running-note">{t("running.note")}</p>
         </section>
       </div>
     </div>

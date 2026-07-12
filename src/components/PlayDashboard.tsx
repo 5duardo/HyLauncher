@@ -15,6 +15,7 @@ import {
 import { PlayButton } from "./PlayButton";
 import { GameRunningPanel } from "./GameRunningPanel";
 import { ProgressBar } from "./ProgressBar";
+import { useI18n } from "../lib/i18n";
 import type { LauncherState, PackManifest, ProgressEvent } from "../lib/types";
 
 interface PlayDashboardProps {
@@ -56,6 +57,7 @@ export function PlayDashboard({
   onOpenTextures,
   onOpenShaders,
 }: PlayDashboardProps) {
+  const { t } = useI18n();
   const mc = manifest?.minecraft ?? "1.20.1";
   const fabric = manifest?.fabricLoader ?? "";
   const serverName = manifest?.server.name ?? "HyServer";
@@ -90,9 +92,11 @@ export function PlayDashboard({
           <div className="hy-hero-brand">
             <img src="/logo.png" alt="" className="hy-hero-logo" />
             <div>
-              <p className="hy-hero-kicker">{packName} · v{packVersion}</p>
+              <p className="hy-hero-kicker">
+                {packName} · v{packVersion}
+              </p>
               <h2 className="hy-hero-title">
-                {hasAccount ? `Hola, ${username}` : "HyLauncher"}
+                {hasAccount ? t("play.hello", { name: username }) : "HyLauncher"}
               </h2>
             </div>
           </div>
@@ -105,16 +109,17 @@ export function PlayDashboard({
             <span className={`hy-pill ${syncOk ? "hy-pill--ok" : "hy-pill--warn"}`}>
               {syncOk ? (
                 <>
-                  <FaCheckCircle size={11} /> Mods OK
+                  <FaCheckCircle size={11} /> {t("play.modsOk")}
                 </>
               ) : (
                 <>
-                  <FaExclamationTriangle size={11} /> {missingMods} pendientes
+                  <FaExclamationTriangle size={11} />{" "}
+                  {t("play.pending", { count: missingMods })}
                 </>
               )}
             </span>
             {!hasAccount && (
-              <span className="hy-pill hy-pill--warn">Sin sesión</span>
+              <span className="hy-pill hy-pill--warn">{t("play.noSession")}</span>
             )}
           </div>
         </div>
@@ -136,9 +141,9 @@ export function PlayDashboard({
             }
             subtitle={
               !hasAccount
-                ? "Inicia sesión para jugar"
+                ? t("play.loginToPlay")
                 : missingMods > 0
-                  ? "Instalar mods primero"
+                  ? t("play.installModsFirst")
                   : `${serverAddress}:${serverPort}`
             }
           />
@@ -148,7 +153,7 @@ export function PlayDashboard({
           type="button"
           className="hy-hero-settings"
           onClick={onOpenSettings}
-          title="Ajustes"
+          title={t("nav.settings")}
         >
           <FaCog size={16} />
         </button>
@@ -163,16 +168,16 @@ export function PlayDashboard({
             <span className="hy-server-name">{serverName}</span>
             <span className="hy-server-addr">
               {serverAddress}:{serverPort}
-              {autoConnect ? " · conexión automática al lanzar" : ""}
+              {autoConnect ? t("play.autoConnect") : ""}
             </span>
           </div>
         </div>
         {missingMods > 0 ? (
           <button type="button" className="btn btn--primary btn--sm" onClick={onOpenMods}>
-            Ir a mods
+            {t("play.goToMods")}
           </button>
         ) : (
-          <span className="hy-server-live">Listo</span>
+          <span className="hy-server-live">{t("play.ready")}</span>
         )}
       </div>
 
@@ -181,14 +186,14 @@ export function PlayDashboard({
           <span className="hy-meta-icon">
             <FaCube size={18} />
           </span>
-          <span className="hy-meta-label">Mods</span>
+          <span className="hy-meta-label">{t("nav.mods")}</span>
           <span className="hy-meta-value">
             {installedMods}/{modsCount}
           </span>
           <span className="hy-meta-hint">
             {missingMods > 0
-              ? `${missingMods} por descargar`
-              : "Todo sincronizado"}
+              ? t("play.toDownload", { count: missingMods })
+              : t("play.synced")}
           </span>
         </button>
 
@@ -196,7 +201,7 @@ export function PlayDashboard({
           <span className="hy-meta-icon">
             <FaGamepad size={18} />
           </span>
-          <span className="hy-meta-label">Cliente</span>
+          <span className="hy-meta-label">{t("play.client")}</span>
           <span className="hy-meta-value">{mc}</span>
           <span className="hy-meta-hint">
             Fabric {fabric || "—"} · Java 17
@@ -207,20 +212,20 @@ export function PlayDashboard({
           <span className="hy-meta-icon">
             <img src="/logo.png" alt="" />
           </span>
-          <span className="hy-meta-label">Pack</span>
+          <span className="hy-meta-label">{t("play.pack")}</span>
           <span className="hy-meta-value">{packVersion}</span>
           <span className="hy-meta-hint">{packName}</span>
         </div>
       </div>
 
       <div className="hy-quick">
-        <p className="hy-quick-title">Accesos</p>
+        <p className="hy-quick-title">{t("play.shortcuts")}</p>
         <div className="hy-quick-grid">
           <button type="button" className="hy-quick-btn" onClick={onOpenMods}>
             <FaCube size={16} />
             <span>
-              <strong>Mods</strong>
-              <em>Ver lista e instalar</em>
+              <strong>{t("nav.mods")}</strong>
+              <em>{t("play.modsHint")}</em>
             </span>
           </button>
           <button
@@ -231,8 +236,8 @@ export function PlayDashboard({
           >
             <FaLayerGroup size={16} />
             <span>
-              <strong>Texturas</strong>
-              <em>Packs opcionales</em>
+              <strong>{t("nav.textures")}</strong>
+              <em>{t("play.texturesHint")}</em>
             </span>
           </button>
           <button
@@ -243,15 +248,15 @@ export function PlayDashboard({
           >
             <FaMagic size={16} />
             <span>
-              <strong>Shaders</strong>
-              <em>Efectos visuales</em>
+              <strong>{t("nav.shaders")}</strong>
+              <em>{t("play.shadersHint")}</em>
             </span>
           </button>
           <button type="button" className="hy-quick-btn" onClick={onOpenSettings}>
             <FaCog size={16} />
             <span>
-              <strong>Ajustes</strong>
-              <em>RAM, Java e idioma</em>
+              <strong>{t("nav.settings")}</strong>
+              <em>{t("play.settingsHint")}</em>
             </span>
           </button>
         </div>

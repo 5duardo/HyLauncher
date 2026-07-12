@@ -2,6 +2,7 @@
 // HyLauncher — PlayButton Component
 // ============================================================
 
+import { useI18n } from "../lib/i18n";
 import type { LauncherState } from "../lib/types";
 
 interface PlayButtonProps {
@@ -12,23 +13,6 @@ interface PlayButtonProps {
   subtitle?: string;
 }
 
-const BUTTON_CONFIG: Record<
-  LauncherState,
-  { label: string; showSpinner: boolean; className: string }
-> = {
-  idle: { label: "LANZAR JUEGO", showSpinner: false, className: "" },
-  checking: { label: "VERIFICANDO...", showSpinner: true, className: "play-button--installing" },
-  needs_install: { label: "INSTALAR Y JUGAR", showSpinner: false, className: "" },
-  needs_update: { label: "INSTALAR MODS", showSpinner: false, className: "play-button--warning" },
-  downloading: { label: "DESCARGANDO...", showSpinner: true, className: "play-button--installing" },
-  installing: { label: "INSTALANDO...", showSpinner: true, className: "play-button--installing" },
-  verifying: { label: "VERIFICANDO...", showSpinner: true, className: "play-button--installing" },
-  ready: { label: "LANZAR JUEGO", showSpinner: false, className: "" },
-  launching: { label: "LANZANDO...", showSpinner: true, className: "play-button--installing" },
-  running: { label: "JUGANDO", showSpinner: false, className: "play-button--installing" },
-  error: { label: "REINTENTAR", showSpinner: false, className: "play-button--error" },
-};
-
 export function PlayButton({
   state,
   onClick,
@@ -36,7 +20,54 @@ export function PlayButton({
   variant = "default",
   subtitle,
 }: PlayButtonProps) {
-  const config = BUTTON_CONFIG[state];
+  const { t } = useI18n();
+
+  const config: Record<
+    LauncherState,
+    { label: string; showSpinner: boolean; className: string }
+  > = {
+    idle: { label: t("btn.launch"), showSpinner: false, className: "" },
+    checking: {
+      label: t("btn.checking"),
+      showSpinner: true,
+      className: "play-button--installing",
+    },
+    needs_install: { label: t("btn.installPlay"), showSpinner: false, className: "" },
+    needs_update: {
+      label: t("btn.installMods"),
+      showSpinner: false,
+      className: "play-button--warning",
+    },
+    downloading: {
+      label: t("btn.downloading"),
+      showSpinner: true,
+      className: "play-button--installing",
+    },
+    installing: {
+      label: t("btn.installing"),
+      showSpinner: true,
+      className: "play-button--installing",
+    },
+    verifying: {
+      label: t("btn.verifying"),
+      showSpinner: true,
+      className: "play-button--installing",
+    },
+    ready: { label: t("btn.launch"), showSpinner: false, className: "" },
+    launching: {
+      label: t("btn.launching"),
+      showSpinner: true,
+      className: "play-button--installing",
+    },
+    running: {
+      label: t("btn.playing"),
+      showSpinner: false,
+      className: "play-button--installing",
+    },
+    error: { label: t("btn.retry"), showSpinner: false, className: "play-button--error" },
+  };
+
+  const button = config[state];
   const isDisabled =
     disabled ||
     state === "downloading" ||
@@ -53,15 +84,15 @@ export function PlayButton({
       {isLunar && <div className="play-glow play-glow--lunar" />}
       {!isLunar && <div className="play-glow" />}
       <button
-        className={`play-button ${isLunar ? "play-button--lunar" : ""} ${config.className}`}
+        className={`play-button ${isLunar ? "play-button--lunar" : ""} ${button.className}`}
         onClick={onClick}
         disabled={isDisabled}
         id="play-button"
       >
         <span className={`btn-content ${isLunar ? "btn-content--lunar" : ""}`}>
-          {config.showSpinner && <span className="spinner" />}
+          {button.showSpinner && <span className="spinner" />}
           <span className="btn-label-group">
-            <span className="btn-label-main">{config.label}</span>
+            <span className="btn-label-main">{button.label}</span>
             {isLunar && subtitle && (
               <span className="btn-label-sub">{subtitle}</span>
             )}

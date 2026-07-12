@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FaKey } from "react-icons/fa";
 import { open } from "@tauri-apps/plugin-shell";
 import type { DeviceCodeResponse } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface MicrosoftLoginProps {
   onStart: () => void;
@@ -51,6 +52,7 @@ export function MicrosoftLogin({
   isPolling,
   isLoading,
 }: MicrosoftLoginProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const autoStartedRef = useRef<string | null>(null);
 
@@ -83,26 +85,28 @@ export function MicrosoftLogin({
             type="button"
             className={`code code--clickable ${copied ? "code--copied" : ""}`}
             onClick={() => handleCopyCode(deviceCode.userCode)}
-            title="Clic para copiar"
+            title={t("ms.copyTitle")}
           >
             {deviceCode.userCode}
           </button>
-          {copied && <span className="code-copy-hint">Copiado al portapapeles ✓</span>}
+          {copied && (
+            <span className="code-copy-hint">{t("ms.copiedClipboard")}</span>
+          )}
           <p className="instruction">
-            El código se copió y se abrió{" "}
+            {t("ms.instruction").split("{link}")[0]}
             <button
               type="button"
               className="link"
               onClick={() => openVerificationUrl(deviceCode.verificationUri)}
             >
               {deviceCode.verificationUri}
-            </button>{" "}
-            en tu navegador. Pega el código allí para continuar.
+            </button>
+            {t("ms.instruction").split("{link}")[1] ?? ""}
           </p>
         </div>
 
         <div className="polling-indicator">
-          <span>Esperando autenticación</span>
+          <span>{t("ms.waitingAuth")}</span>
           <span className="dots">
             <span />
             <span />
@@ -115,7 +119,7 @@ export function MicrosoftLogin({
           onClick={onCancel}
           style={{ marginTop: "16px" }}
         >
-          Cancelar
+          {t("ms.cancel")}
         </button>
       </div>
     );
@@ -131,8 +135,7 @@ export function MicrosoftLogin({
           lineHeight: 1.6,
         }}
       >
-        Inicia sesión con tu cuenta de Microsoft para jugar con tu perfil
-        premium. Se copiará el código y se abrirá el navegador automáticamente.
+        {t("ms.blurb")}
       </p>
       <button
         className="btn btn--primary btn--full"
@@ -141,12 +144,12 @@ export function MicrosoftLogin({
       >
         {isLoading ? (
           <>
-            <span className="spinner" /> Conectando...
+            <span className="spinner" /> {t("ms.connecting")}
           </>
         ) : (
           <>
             <FaKey size={14} style={{ marginRight: 6 }} />
-            Iniciar con Microsoft
+            {t("ms.start")}
           </>
         )}
       </button>
