@@ -16,13 +16,36 @@ interface UseDiscordPresenceOptions {
 export function useDiscordPresence({
   launcherState,
   username,
-  serverName = "HyServer",
+  serverName = "Minecraft",
   language,
 }: UseDiscordPresenceOptions) {
   const startedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+
+    const buildPayload = () => {
+      const es = language !== "en";
+      const playing = launcherState === "running";
+      const details = playing
+        ? es
+          ? "Jugando Minecraft"
+          : "Playing Minecraft"
+        : es
+          ? "Usando HyLauncher"
+          : "Using HyLauncher";
+      const presenceState = playing
+        ? serverName
+        : username
+          ? es
+            ? `Como ${username}`
+            : `As ${username}`
+          : es
+            ? "En el menú"
+            : "In the menu";
+      return { details, presenceState };
+    };
 
     const sync = async () => {
       try {
@@ -35,32 +58,18 @@ export function useDiscordPresence({
           return;
         }
 
-        const es = language !== "en";
-        const playing = launcherState === "running";
-
-        const details = playing
-          ? es
-            ? "Jugando Minecraft"
-            : "Playing Minecraft"
-          : es
-            ? "Usando HyLauncher"
-            : "Using HyLauncher";
-
-        const presenceState = playing
-          ? serverName
-          : username
-            ? es
-              ? `Como ${username}`
-              : `As ${username}`
-            : es
-              ? "En el menú"
-              : "In the menu";
-
+        const { details, presenceState } = buildPayload();
         await cmd.updateDiscordPresence(details, presenceState);
         startedRef.current = true;
       } catch (err) {
-        // Discord may be closed — ignore quietly
         console.warn("Discord RPC:", err);
+        // Reintentar si Discord aún no estaba listo
+        if (!cancelled && attempts < 8) {
+          attempts += 1;
+          window.setTimeout(() => {
+            void sync();
+          }, 700 * attempts);
+        }
       }
     };
 

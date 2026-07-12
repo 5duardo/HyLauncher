@@ -7,8 +7,10 @@ import type {
   Account,
   DeviceCodeResponse,
   LauncherSettings,
+  LauncherUpdateCheck,
   PackManifest,
   ProgressEvent,
+  StorageInfo,
   UpdateDiff,
 } from "./types";
 
@@ -100,6 +102,11 @@ export async function isGameRunning(): Promise<boolean> {
   return invoke("is_game_running");
 }
 
+/** Buffered Minecraft / Fabric console lines */
+export async function getGameConsoleLogs(): Promise<string[]> {
+  return invoke("get_game_console_logs");
+}
+
 /** Force-stop the running game process */
 export async function stopGame(): Promise<void> {
   return invoke("stop_game");
@@ -142,6 +149,53 @@ export async function clearDiscordPresence(): Promise<void> {
   return invoke("clear_discord_presence");
 }
 
+/** Discord RPC connection status */
+export async function getDiscordStatus(): Promise<{
+  connected: boolean;
+  enabled: boolean;
+  lastError: string | null;
+  clientId: string;
+}> {
+  return invoke("get_discord_status");
+}
+
+/** Disk usage for launcher folders */
+export async function getStorageInfo(): Promise<StorageInfo> {
+  return invoke("get_storage_info");
+}
+
+/** Clear download/cache folder */
+export async function clearLauncherCache(): Promise<number> {
+  return invoke("clear_launcher_cache");
+}
+
+/** Clear instance logs / crash-reports */
+export async function clearLauncherLogs(): Promise<number> {
+  return invoke("clear_launcher_logs");
+}
+
+/** Open a launcher folder in the OS file manager */
+export async function openStorageFolder(
+  which: "launcher" | "instance" | "cache" | "java" | "data"
+): Promise<void> {
+  return invoke("open_storage_folder", { which });
+}
+
+/** App version from Cargo.toml */
+export async function getAppVersion(): Promise<string> {
+  return invoke("get_app_version");
+}
+
+/** Check GitHub Releases for a newer launcher build */
+export async function checkForLauncherUpdate(): Promise<LauncherUpdateCheck> {
+  return invoke("check_for_launcher_update");
+}
+
+/** Download latest release installer and open it */
+export async function installLauncherUpdate(): Promise<string> {
+  return invoke("install_launcher_update");
+}
+
 // ---- Window Controls ----
 
 export async function minimizeWindow(): Promise<void> {
@@ -160,6 +214,16 @@ export async function closeWindow(): Promise<void> {
   return invoke("close_window");
 }
 
+/** Compact square splash window */
+export async function setWindowSplash(): Promise<void> {
+  return invoke("set_window_splash");
+}
+
+/** Expand to the normal launcher window size */
+export async function setWindowMain(): Promise<void> {
+  return invoke("set_window_main");
+}
+
 // ---- Progress Event Listener ----
 
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -176,6 +240,13 @@ export function onStateChange(
   callback: (state: string) => void
 ): Promise<UnlistenFn> {
   return listen<string>("state_change", (e) => callback(e.payload));
+}
+
+/** Live Minecraft console lines */
+export function onGameLog(
+  callback: (line: string) => void
+): Promise<UnlistenFn> {
+  return listen<{ line: string }>("game_log", (e) => callback(e.payload.line));
 }
 
 /** Listen for error messages */

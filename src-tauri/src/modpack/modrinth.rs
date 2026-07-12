@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[derive(Debug, Deserialize)]
 struct ModrinthProject {
     id: String,
+    slug: Option<String>,
     icon_url: Option<String>,
 }
 
@@ -67,7 +68,11 @@ pub async fn fetch_mod_icons(
         for project in projects {
             if let Some(icon_url) = project.icon_url {
                 if let Some(mod_id) = project_to_mod.get(&project.id) {
-                    icons.insert(mod_id.clone(), icon_url);
+                    icons.insert(mod_id.clone(), icon_url.clone());
+                } else if let Some(slug) = &project.slug {
+                    if let Some(mod_id) = project_to_mod.get(slug) {
+                        icons.insert(mod_id.clone(), icon_url);
+                    }
                 }
             }
         }

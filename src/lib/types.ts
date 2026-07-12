@@ -32,6 +32,7 @@ export type LauncherState =
   | "ready"
   | "launching"
   | "running"
+  | "game_closed"
   | "error";
 
 /** Progress event from backend */
@@ -161,7 +162,36 @@ export interface LauncherSettings {
   theme: "dark";
   language: string;
   discordRpcEnabled?: boolean;
-  discordClientId?: string;
+  notificationsUpdates?: boolean;
+  notificationsDownloads?: boolean;
+  notificationsGame?: boolean;
+  privacyShareUsage?: boolean;
+  privacyCrashReports?: boolean;
+  checkUpdatesOnStart?: boolean;
+}
+
+/** Disk usage breakdown */
+export interface StorageInfo {
+  launcherRoot: string;
+  instanceBytes: number;
+  cacheBytes: number;
+  javaBytes: number;
+  dataBytes: number;
+  logsBytes: number;
+  totalBytes: number;
+}
+
+/** GitHub Releases update check */
+export interface LauncherUpdateCheck {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string;
+  releaseName: string;
+  releaseNotes: string;
+  htmlUrl: string;
+  downloadUrl?: string | null;
+  downloadSize?: number | null;
+  downloadFilename?: string | null;
 }
 
 /** Update diff result */

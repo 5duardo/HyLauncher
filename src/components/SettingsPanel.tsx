@@ -17,20 +17,29 @@ import {
   FaCode,
   FaDesktop,
   FaDiscord,
+  FaExternalLinkAlt,
   FaFolder,
   FaGamepad,
   FaGlobe,
+  FaHdd,
   FaInfoCircle,
   FaLock,
   FaMicrochip,
   FaMoon,
   FaSearch,
   FaShieldAlt,
+  FaSync,
   FaTh,
   FaTimes,
+  FaTrash,
   FaUser,
 } from "react-icons/fa";
-import type { Account, LauncherSettings } from "../lib/types";
+import type {
+  Account,
+  LauncherSettings,
+  LauncherUpdateCheck,
+  StorageInfo,
+} from "../lib/types";
 import { useI18n, type Locale } from "../lib/i18n";
 import * as cmd from "../lib/tauri-commands";
 import { AccountAvatar } from "./AccountAvatar";
@@ -138,6 +147,551 @@ function LanguageDropdown({
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** i;
+  return `${value < 10 && i > 0 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
+}
+
+function StorageSettingsSection({
+  t,
+}: {
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const [info, setInfo] = useState<StorageInfo | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setInfo(await cmd.getStorageInfo());
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const runAction = async (key: string, action: () => Promise<unknown>) => {
+    setBusy(key);
+    setMessage(null);
+    try {
+      await action();
+      await refresh();
+      setMessage(t("settings.storage.done"));
+    } catch (err) {
+      setMessage(String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const total = info?.totalBytes || 1;
+  const rows: { label: string; bytes: number; which: "instance" | "cache" | "java" | "data" }[] =
+    info
+      ? [
+          {
+            label: t("settings.storage.instance"),
+            bytes: info.instanceBytes,
+            which: "instance",
+          },
+          { label: t("settings.storage.cache"), bytes: info.cacheBytes, which: "cache" },
+          { label: t("settings.storage.java"), bytes: info.javaBytes, which: "java" },
+          { label: t("settings.storage.data"), bytes: info.dataBytes, which: "data" },
+        ]
+      : [];
+
+  return (
+    <section className="settings-section">
+      <div className="settings-section-head">
+        <div className="settings-section-icon">
+          <FaHdd size={16} />
+        </div>
+        <div>
+          <h3>{t("settings.storage.title")}</h3>
+          <p>{t("settings.storage.desc")}</p>
+        </div>
+      </div>
+
+      {info && (
+        <>
+          <p className="settings-storage-total">
+            {t("settings.storage.total", { size: formatBytes(info.totalBytes) })}
+          </p>
+          <p className="settings-hint settings-storage-path">{info.launcherRoot}</p>
+
+          <div className="settings-storage-list">
+            {rows.map((row) => (
+              <div key={row.which} className="settings-storage-row">
+                <div className="settings-storage-row-top">
+                  <strong>{row.label}</strong>
+                  <span>{formatBytes(row.bytes)}</span>
+                </div>
+                <div className="settings-storage-bar">
+                  <span style={{ width: `${Math.max(2, (row.bytes / total) * 100)}%` }} />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => void cmd.openStorageFolder(row.which)}
+                >
+                  <FaFolder size={12} /> {t("settings.storage.open")}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="settings-storage-actions">
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={!!busy}
+              onClick={() => void cmd.openStorageFolder("launcher")}
+            >
+              <FaFolder size={14} /> {t("settings.storage.openRoot")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={busy === "cache"}
+              onClick={() =>
+                void runAction("cache", () => cmd.clearLauncherCache())
+              }
+            >
+              <FaTrash size={14} />{" "}
+              {busy === "cache"
+                ? t("settings.storage.working")
+                : t("settings.storage.clearCache")}
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              disabled={busy === "logs"}
+              onClick={() =>
+                void runAction("logs", () => cmd.clearLauncherLogs())
+              }
+            >
+              <FaTrash size={14} />{" "}
+              {busy === "logs"
+                ? t("settings.storage.working")
+                : t("settings.storage.clearLogs", {
+                    size: formatBytes(info.logsBytes),
+                  })}
+            </button>
+          </div>
+          {message && <p className="settings-hint">{message}</p>}
+        </>
+      )}
+
+      {!info && <p className="settings-hint">{t("settings.storage.loading")}</p>}
+    </section>
+  );
+}
+
+function NotificationsSettingsSection({
+  settings,
+  updateSettings,
+  t,
+}: {
+  settings: LauncherSettings;
+  updateSettings: (patch: Partial<LauncherSettings>, autoSave?: boolean) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const toggles: {
+    key: keyof LauncherSettings;
+    title: string;
+    hint: string;
+    value: boolean;
+  }[] = [
+    {
+      key: "notificationsUpdates",
+      title: t("settings.notifications.updates"),
+      hint: t("settings.notifications.updatesHint"),
+      value: settings.notificationsUpdates !== false,
+    },
+    {
+      key: "notificationsDownloads",
+      title: t("settings.notifications.downloads"),
+      hint: t("settings.notifications.downloadsHint"),
+      value: settings.notificationsDownloads !== false,
+    },
+    {
+      key: "notificationsGame",
+      title: t("settings.notifications.game"),
+      hint: t("settings.notifications.gameHint"),
+      value: settings.notificationsGame !== false,
+    },
+  ];
+
+  return (
+    <section className="settings-section">
+      <div className="settings-section-head">
+        <div className="settings-section-icon">
+          <FaBell size={16} />
+        </div>
+        <div>
+          <h3>{t("settings.notifications.title")}</h3>
+          <p>{t("settings.notifications.desc")}</p>
+        </div>
+      </div>
+
+      {toggles.map((item) => (
+        <label key={item.key} className="settings-toggle-row">
+          <div>
+            <strong>{item.title}</strong>
+            <span>{item.hint}</span>
+          </div>
+          <input
+            type="checkbox"
+            className="settings-toggle"
+            checked={item.value}
+            onChange={(e) =>
+              updateSettings({ [item.key]: e.target.checked } as Partial<LauncherSettings>)
+            }
+          />
+        </label>
+      ))}
+    </section>
+  );
+}
+
+function PrivacySettingsSection({
+  settings,
+  updateSettings,
+  t,
+}: {
+  settings: LauncherSettings;
+  updateSettings: (patch: Partial<LauncherSettings>, autoSave?: boolean) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  return (
+    <section className="settings-section">
+      <div className="settings-section-head">
+        <div className="settings-section-icon">
+          <FaLock size={16} />
+        </div>
+        <div>
+          <h3>{t("settings.privacy.title")}</h3>
+          <p>{t("settings.privacy.desc")}</p>
+        </div>
+      </div>
+
+      <label className="settings-toggle-row">
+        <div>
+          <strong>{t("settings.privacy.usage")}</strong>
+          <span>{t("settings.privacy.usageHint")}</span>
+        </div>
+        <input
+          type="checkbox"
+          className="settings-toggle"
+          checked={!!settings.privacyShareUsage}
+          onChange={(e) => updateSettings({ privacyShareUsage: e.target.checked })}
+        />
+      </label>
+
+      <label className="settings-toggle-row">
+        <div>
+          <strong>{t("settings.privacy.crash")}</strong>
+          <span>{t("settings.privacy.crashHint")}</span>
+        </div>
+        <input
+          type="checkbox"
+          className="settings-toggle"
+          checked={settings.privacyCrashReports !== false}
+          onChange={(e) => updateSettings({ privacyCrashReports: e.target.checked })}
+        />
+      </label>
+
+      <label className="settings-toggle-row">
+        <div>
+          <strong>{t("settings.privacy.discord")}</strong>
+          <span>{t("settings.privacy.discordHint")}</span>
+        </div>
+        <input
+          type="checkbox"
+          className="settings-toggle"
+          checked={settings.discordRpcEnabled !== false}
+          onChange={(e) => updateSettings({ discordRpcEnabled: e.target.checked })}
+        />
+      </label>
+
+      <p className="settings-hint">{t("settings.privacy.note")}</p>
+    </section>
+  );
+}
+
+function AboutSettingsSection({
+  settings,
+  updateSettings,
+  t,
+}: {
+  settings: LauncherSettings;
+  updateSettings: (patch: Partial<LauncherSettings>, autoSave?: boolean) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const [version, setVersion] = useState("…");
+  const [check, setCheck] = useState<LauncherUpdateCheck | null>(null);
+  const [busy, setBusy] = useState<"check" | "install" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void cmd.getAppVersion().then(setVersion).catch(() => setVersion("1.0.0"));
+  }, []);
+
+  const runCheck = async () => {
+    setBusy("check");
+    setError(null);
+    try {
+      setCheck(await cmd.checkForLauncherUpdate());
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runInstall = async () => {
+    setBusy("install");
+    setError(null);
+    try {
+      await cmd.installLauncherUpdate();
+      setError(t("settings.about.updateStarted"));
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="settings-section">
+      <div className="settings-about-card">
+        <img src="/logo.png" alt="HyLauncher" className="settings-about-logo" />
+        <h3>HyLauncher</h3>
+        <p>{t("settings.about.tagline")}</p>
+        <span className="settings-about-version">
+          v{version} · Minecraft 1.20.1 · Fabric
+        </span>
+      </div>
+
+      <div className="settings-section-head" style={{ marginTop: 20 }}>
+        <div className="settings-section-icon">
+          <FaSync size={16} />
+        </div>
+        <div>
+          <h3>{t("settings.about.updateTitle")}</h3>
+          <p>{t("settings.about.updateDesc")}</p>
+        </div>
+      </div>
+
+      <label className="settings-toggle-row">
+        <div>
+          <strong>{t("settings.about.checkOnStart")}</strong>
+          <span>{t("settings.about.checkOnStartHint")}</span>
+        </div>
+        <input
+          type="checkbox"
+          className="settings-toggle"
+          checked={settings.checkUpdatesOnStart !== false}
+          onChange={(e) => updateSettings({ checkUpdatesOnStart: e.target.checked })}
+        />
+      </label>
+
+      <div className="settings-storage-actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={busy !== null}
+          onClick={() => void runCheck()}
+        >
+          <FaSync size={14} />{" "}
+          {busy === "check"
+            ? t("settings.about.checking")
+            : t("settings.about.checkNow")}
+        </button>
+        {check?.updateAvailable && check.downloadUrl && (
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={busy !== null}
+            onClick={() => void runInstall()}
+          >
+            {busy === "install"
+              ? t("settings.about.installing")
+              : t("settings.about.install", { version: check.latestVersion })}
+          </button>
+        )}
+        {check?.htmlUrl && (
+          <a
+            className="btn btn--secondary"
+            href={check.htmlUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <FaExternalLinkAlt size={12} /> {t("settings.about.releasePage")}
+          </a>
+        )}
+      </div>
+
+      {check && !check.updateAvailable && !error && (
+        <p className="settings-hint">
+          {t("settings.about.upToDate", { version: check.currentVersion })}
+        </p>
+      )}
+      {check?.updateAvailable && (
+        <div className="settings-update-notes">
+          <strong>
+            {t("settings.about.available", {
+              version: check.latestVersion,
+              name: check.releaseName || check.latestVersion,
+            })}
+          </strong>
+          {check.releaseNotes && (
+            <pre className="settings-update-body">{check.releaseNotes.slice(0, 1200)}</pre>
+          )}
+        </div>
+      )}
+      {error && <p className="settings-hint">{error}</p>}
+    </section>
+  );
+}
+
+function DiscordSettingsSection({
+  discordEnabled,
+  updateSettings,
+  t,
+}: {
+  discordEnabled: boolean;
+  updateSettings: (patch: Partial<LauncherSettings>, autoSave?: boolean) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
+}) {
+  const [status, setStatus] = useState<{
+    connected: boolean;
+    enabled: boolean;
+    lastError: string | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const s = await cmd.getDiscordStatus();
+      setStatus({
+        connected: s.connected,
+        enabled: s.enabled,
+        lastError: s.lastError,
+      });
+    } catch {
+      setStatus({ connected: false, enabled: discordEnabled, lastError: null });
+    }
+  }, [discordEnabled]);
+
+  useEffect(() => {
+    void refresh();
+    const id = window.setInterval(() => void refresh(), 2500);
+    return () => window.clearInterval(id);
+  }, [refresh]);
+
+  const retry = async () => {
+    setBusy(true);
+    try {
+      await cmd.updateDiscordPresence(
+        t("settings.discord.previewDetails"),
+        t("settings.discord.previewState")
+      );
+      await refresh();
+    } catch (err) {
+      console.warn(err);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusLabel = !discordEnabled
+    ? t("settings.discord.statusOff")
+    : status?.connected
+      ? t("settings.discord.statusOk")
+      : t("settings.discord.statusFail");
+
+  return (
+    <section className="settings-section">
+      <div className="settings-section-head">
+        <div className="settings-section-icon">
+          <FaDiscord size={16} />
+        </div>
+        <div>
+          <h3>{t("settings.discord.title")}</h3>
+          <p>{t("settings.discord.desc")}</p>
+        </div>
+      </div>
+
+      <label className="settings-toggle-row">
+        <div>
+          <strong>{t("settings.discord.toggle")}</strong>
+          <span>{t("settings.discord.toggleHint")}</span>
+        </div>
+        <input
+          type="checkbox"
+          className="settings-toggle"
+          checked={discordEnabled}
+          onChange={(e) => {
+            const enabled = e.target.checked;
+            updateSettings({ discordRpcEnabled: enabled });
+            if (!enabled) {
+              void cmd.clearDiscordPresence().catch(console.warn);
+              setStatus({ connected: false, enabled: false, lastError: null });
+            } else {
+              void retry();
+            }
+          }}
+        />
+      </label>
+
+      <div
+        className={`settings-discord-status ${
+          status?.connected ? "settings-discord-status--ok" : "settings-discord-status--fail"
+        }`}
+      >
+        <span>{statusLabel}</span>
+        {status?.lastError && !status.connected && (
+          <em>{status.lastError}</em>
+        )}
+        {discordEnabled && (
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => void retry()}
+            disabled={busy}
+          >
+            {t("settings.discord.retry")}
+          </button>
+        )}
+      </div>
+
+      <p className="settings-hint">{t("settings.discord.where")}</p>
+
+      <div className="settings-discord-preview" aria-hidden={!discordEnabled}>
+        <div className="settings-discord-preview-badge">
+          <FaDiscord size={14} />
+          {t("settings.discord.preview")}
+        </div>
+        <div className="settings-discord-preview-card">
+          <img src="/logo.png" alt="" className="settings-discord-preview-logo" />
+          <div>
+            <strong>HyLauncher</strong>
+            <span>{t("settings.discord.previewDetails")}</span>
+            <em>{t("settings.discord.previewState")}</em>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsPanel({
   onClose,
   activeAccount,
@@ -152,7 +706,12 @@ export function SettingsPanel({
     theme: "dark",
     language: "es",
     discordRpcEnabled: true,
-    discordClientId: "",
+    notificationsUpdates: true,
+    notificationsDownloads: true,
+    notificationsGame: true,
+    privacyShareUsage: false,
+    privacyCrashReports: true,
+    checkUpdatesOnStart: true,
   });
   const [activeTab, setActiveTab] = useState<SettingsTab>("game");
   const [search, setSearch] = useState("");
@@ -174,13 +733,11 @@ export function SettingsPanel({
         {
           id: "storage",
           label: t("settings.nav.storage"),
-          disabled: true,
           icon: <FaFolder size={18} />,
         },
         {
           id: "notifications",
           label: t("settings.nav.notifications"),
-          disabled: true,
           icon: <FaBell size={18} />,
         },
         {
@@ -191,7 +748,6 @@ export function SettingsPanel({
         {
           id: "privacy",
           label: t("settings.nav.privacy"),
-          disabled: true,
           icon: <FaLock size={18} />,
         },
         { id: "about", label: t("settings.nav.about"), icon: <FaInfoCircle size={18} /> },
@@ -266,8 +822,27 @@ export function SettingsPanel({
     matches(["cuenta", "account", "sesión", "sesion", "login", "premium", "offline"]);
   const showDiscord =
     activeTab === "discord" && matches(["discord", "rpc", "presence", "estado", "rich"]);
+  const showStorage =
+    activeTab === "storage" &&
+    matches([
+      "almacenamiento",
+      "storage",
+      "cache",
+      "disco",
+      "disk",
+      "carpeta",
+      "folder",
+      "logs",
+    ]);
+  const showNotifications =
+    activeTab === "notifications" &&
+    matches(["notificaciones", "notifications", "avisos", "alertas"]);
+  const showPrivacy =
+    activeTab === "privacy" &&
+    matches(["privacidad", "privacy", "datos", "crash", "telemetria", "telemetry"]);
   const showAbout =
-    activeTab === "about" && matches(["acerca", "about", "launcher", "hy"]);
+    activeTab === "about" &&
+    matches(["acerca", "about", "launcher", "hy", "actualizar", "update", "version"]);
 
   const discordEnabled = settings.discordRpcEnabled !== false;
 
@@ -584,96 +1159,37 @@ export function SettingsPanel({
               )}
 
               {showDiscord && (
-                <section className="settings-section">
-                  <div className="settings-section-head">
-                    <div className="settings-section-icon">
-                      <FaDiscord size={16} />
-                    </div>
-                    <div>
-                      <h3>{t("settings.discord.title")}</h3>
-                      <p>{t("settings.discord.desc")}</p>
-                    </div>
-                  </div>
+                <DiscordSettingsSection
+                  discordEnabled={discordEnabled}
+                  updateSettings={updateSettings}
+                  t={t}
+                />
+              )}
 
-                  <label className="settings-toggle-row">
-                    <div>
-                      <strong>{t("settings.discord.toggle")}</strong>
-                      <span>{t("settings.discord.toggleHint")}</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="settings-toggle"
-                      checked={discordEnabled}
-                      onChange={(e) => {
-                        const enabled = e.target.checked;
-                        updateSettings({ discordRpcEnabled: enabled });
-                        if (!enabled) {
-                          void cmd.clearDiscordPresence().catch(console.warn);
-                        } else {
-                          void cmd
-                            .updateDiscordPresence(
-                              t("settings.discord.previewDetails"),
-                              t("settings.discord.previewState")
-                            )
-                            .catch(console.warn);
-                        }
-                      }}
-                    />
-                  </label>
+              {showStorage && <StorageSettingsSection t={t} />}
 
-                  <div className="settings-discord-preview" aria-hidden={!discordEnabled}>
-                    <div className="settings-discord-preview-badge">
-                      <FaDiscord size={14} />
-                      {t("settings.discord.preview")}
-                    </div>
-                    <div className="settings-discord-preview-card">
-                      <img src="/logo.png" alt="" className="settings-discord-preview-logo" />
-                      <div>
-                        <strong>HyLauncher</strong>
-                        <span>{t("settings.discord.previewDetails")}</span>
-                        <em>{t("settings.discord.previewState")}</em>
-                      </div>
-                    </div>
-                  </div>
+              {showNotifications && (
+                <NotificationsSettingsSection
+                  settings={settings}
+                  updateSettings={updateSettings}
+                  t={t}
+                />
+              )}
 
-                  <label className="settings-field-label" htmlFor="discord-client-id">
-                    {t("settings.discord.clientId")}
-                  </label>
-                  <input
-                    id="discord-client-id"
-                    type="text"
-                    className="settings-input"
-                    placeholder={t("settings.discord.clientIdPlaceholder")}
-                    value={settings.discordClientId ?? ""}
-                    onChange={(e) => {
-                      const id = e.target.value.trim();
-                      updateSettings({ discordClientId: id });
-                      if (discordEnabled && id) {
-                        void cmd
-                          .updateDiscordPresence(
-                            t("settings.discord.previewDetails"),
-                            t("settings.discord.previewState")
-                          )
-                          .catch(console.warn);
-                      }
-                    }}
-                    disabled={!discordEnabled}
-                  />
-                  <p className="settings-hint">{t("settings.discord.clientIdHint")}</p>
-                </section>
+              {showPrivacy && (
+                <PrivacySettingsSection
+                  settings={settings}
+                  updateSettings={updateSettings}
+                  t={t}
+                />
               )}
 
               {showAbout && (
-                <section className="settings-section">
-                  <div className="settings-about-card">
-                    <img src="/logo.png" alt="HyLauncher" className="settings-about-logo" />
-                    <h3>HyLauncher</h3>
-                    <p>{t("settings.about.tagline")}</p>
-                    <span className="settings-about-version">
-                      v1.0.0 · Minecraft 1.20.1 · Fabric
-                    </span>
-                  </div>
-                </section>
+                <AboutSettingsSection
+                  settings={settings}
+                  updateSettings={updateSettings}
+                  t={t}
+                />
               )}
 
               {search && filteredNav.length === 0 && (

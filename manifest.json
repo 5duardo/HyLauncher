@@ -1,7 +1,7 @@
 {
-  "packVersion": "1.2.0",
+  "packVersion": "1.2.5",
   "packName": "HyPack",
-  "packDescription": "Modpack oficial del servidor HyServer — rendimiento, visuales y QoL",
+  "packDescription": "Modpack oficial — rendimiento, visuales y QoL",
   "minecraft": "1.20.1",
   "fabricLoader": "0.19.3",
   "baseUrl": "https://github.com/YOUR_USER/hypack/releases/download/v1.0.0",
@@ -305,6 +305,15 @@
       "side": "client"
     },
     {
+      "id": "balm",
+      "filename": "balm-fabric-1.20.1-7.3.41.jar",
+      "url": "https://cdn.modrinth.com/data/MBAkmtvl/versions/sWBQARQL/balm-fabric-1.20.1-7.3.41.jar",
+      "sha1": "fbec1dc356d60efb59bf653cb6e055d561510267",
+      "size": 577494,
+      "required": true,
+      "side": "both"
+    },
+    {
       "id": "trashslot",
       "filename": "trashslot-fabric-1.20.1-15.1.5.jar",
       "url": "https://cdn.modrinth.com/data/vRYk0bv7/versions/rvZNAUdl/trashslot-fabric-1.20.1-15.1.5.jar",
@@ -440,20 +449,236 @@
       "side": "both"
     },
     {
-      "id": "dungeons-and-taverns",
-      "filename": "dungeons-and-taverns-3.0.3.f.jar",
-      "url": "https://cdn.modrinth.com/data/tpehi7ww/versions/d1sY0JqV/dungeons-and-taverns-3.0.3.f.jar",
-      "sha1": "b1b86b4615d078fb592e9f067c94f9f97c6e2f25",
-      "size": 13161726,
+      "id": "jade",
+      "filename": "Jade-1.20-Fabric-11.13.1.jar",
+      "url": "https://cdn.modrinth.com/data/nvQzSEkH/versions/drol2x1P/Jade-1.20-Fabric-11.13.1.jar",
+      "sha1": "511ff9de2b9322089e769433f8613f3ac16bdade",
+      "size": 572882,
       "required": true,
       "side": "both"
     },
     {
-      "id": "guns-plusplus",
-      "filename": "guns++-4.2.jar",
-      "url": "https://cdn.modrinth.com/data/kdch0Jxf/versions/Oo7Fn01r/guns%2B%2B-4.2.jar",
-      "sha1": "896392515b35826f638154b46a36ef0c8fb0467c",
-      "size": 36771615,
+      "id": "plushie-buddies",
+      "filename": "plushie_buddies-1.0.1-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/5hoSWfrw/versions/PNH1avdn/plushie_buddies-1.0.1-1.20.1.jar",
+      "sha1": "15d4c035e17cf097b434d7d95aca08d2be7bc5c3",
+      "size": 495102,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "immersiveportals",
+      "filename": "immersive-portals-5.2.0-mc1.20.1-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/zJpHMkdD/versions/fSBijwCM/immersive-portals-5.2.0-mc1.20.1-fabric.jar",
+      "sha1": "e0327d781901bb6f1caa72dde38846863cf53517",
+      "size": 2934316,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "yungs-api",
+      "filename": "YungsApi-1.20-Fabric-4.0.6.jar",
+      "url": "https://cdn.modrinth.com/data/Ua7DFN59/versions/lscV1N5k/YungsApi-1.20-Fabric-4.0.6.jar",
+      "sha1": "8d39c739b534e7351e9fdabf045f171a4e45c98a",
+      "size": 1396331,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "yungs-better-dungeons",
+      "filename": "YungsBetterDungeons-1.20-Fabric-4.0.4.jar",
+      "url": "https://cdn.modrinth.com/data/o1C1Dkj5/versions/nidyvq2m/YungsBetterDungeons-1.20-Fabric-4.0.4.jar",
+      "sha1": "cb4ea32fe75c9dbcd62f6f3d3f912c1b79ac697a",
+      "size": 944170,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "shippy-ships",
+      "filename": "shippy-ships-1.0.5.4-FABRIC-MC-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/oxBNHOmi/versions/GU9bK0ll/shippy-ships-1.0.5.4-FABRIC-MC-1.20.1.jar",
+      "sha1": "65ec466e6c7c74dc246a5458f16c22d5a07a01a1",
+      "size": 250816,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "resourceful-lib",
+      "filename": "resourcefullib-fabric-1.20.1-2.1.29.jar",
+      "url": "https://cdn.modrinth.com/data/G1hIVOrD/versions/UOdaYbhh/resourcefullib-fabric-1.20.1-2.1.29.jar",
+      "sha1": "e1d85a3100c2f3683a65dca20518e3914d82b0f0",
+      "size": 431646,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "resourceful-config",
+      "filename": "resourcefulconfig-fabric-1.20.1-2.1.3.jar",
+      "url": "https://cdn.modrinth.com/data/M1953qlQ/versions/2gStMKhM/resourcefulconfig-fabric-1.20.1-2.1.3.jar",
+      "sha1": "d351fd7247c8adc0fe41d6b3a04bf869fdf4ddbc",
+      "size": 135078,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "botarium",
+      "filename": "botarium-fabric-1.20.1-2.3.4.jar",
+      "url": "https://cdn.modrinth.com/data/2u6LRnMa/versions/f3ATcSfq/botarium-fabric-1.20.1-2.3.4.jar",
+      "sha1": "20e1c12cd5e4b4127c7b20ab7e7f81e7119dbf8b",
+      "size": 188388,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "ad-astra",
+      "filename": "ad_astra-fabric-1.20.1-1.15.20.jar",
+      "url": "https://cdn.modrinth.com/data/3ufwT9JF/versions/gZClwdxY/ad_astra-fabric-1.20.1-1.15.20.jar",
+      "sha1": "66ffb3d9e39ae5ab698a1528eab57ef0fdd1bfc4",
+      "size": 7317556,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "immersive-aircraft",
+      "filename": "immersive_aircraft-1.4.1+1.20.1-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/x3HZvrj6/versions/jAWG2esy/immersive_aircraft-1.4.1%2B1.20.1-fabric.jar",
+      "sha1": "d4434f96f79874505bdf3ba2487e3743b7ffa983",
+      "size": 2424850,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "architectury-api",
+      "filename": "architectury-9.2.14-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/lhGA9TYQ/versions/WbL7MStR/architectury-9.2.14-fabric.jar",
+      "sha1": "4fa65e32dbf63a871a30fe8ec6fbff9a4b8d007d",
+      "size": 585207,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "epic-knights",
+      "filename": "epic-knights-1.20.1-fabric-10.11.jar",
+      "url": "https://cdn.modrinth.com/data/L6jvzao4/versions/prAF6EW2/epic-knights-1.20.1-fabric-10.11.jar",
+      "sha1": "4e0b40362b0f34b6f6b77d50b5b5bcfffc703eaa",
+      "size": 2808300,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "azurelib",
+      "filename": "azurelib-fabric-1.20.1-2.0.41.jar",
+      "url": "https://cdn.modrinth.com/data/7zlUOZvb/versions/g5kqTxNB/azurelib-fabric-1.20.1-2.0.41.jar",
+      "sha1": "62124d14b1922f458f40794a988b204d6813e837",
+      "size": 819129,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "mcpitanlib",
+      "filename": "mcpitanlib-3.7.1-1.20.1-fabric.jar",
+      "url": "https://cdn.modrinth.com/data/uNRoUnGT/versions/F5KlFcYy/mcpitanlib-3.7.1-1.20.1-fabric.jar",
+      "sha1": "de439a4e700b6049c8e3a2a11dccf856ac32fa9a",
+      "size": 2731555,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "simple-uncrafting-table",
+      "filename": "UncraftingTable-fabric-1.5.6.jar",
+      "url": "https://cdn.modrinth.com/data/d0f1a75r/versions/Tv5AwjFD/UncraftingTable-fabric-1.5.6.jar",
+      "sha1": "1ed7876a757a040cb076e80ed6edeb37bc02144f",
+      "size": 147099,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "immersive-guns",
+      "filename": "immersive_guns-1.3.jar",
+      "url": "https://cdn.modrinth.com/data/fQWA1WGg/versions/eueCHpN6/immersive_guns-1.3.jar",
+      "sha1": "95460c16de6b668e77e667d1a956992f5b22da90",
+      "size": 3176842,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "collective",
+      "filename": "collective-1.20.1-8.39.jar",
+      "url": "https://cdn.modrinth.com/data/e0M1UDsY/versions/ZrHXYjUf/collective-1.20.1-8.39.jar",
+      "sha1": "4622cf120fd3eb82972dc6634d6a5910d04e3c91",
+      "size": 745947,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "tree-harvester",
+      "filename": "treeharvester-1.20.1-9.1.jar",
+      "url": "https://cdn.modrinth.com/data/abooMhox/versions/EQYmDYvI/treeharvester-1.20.1-9.1.jar",
+      "sha1": "f0223c38cb72aa9427daf8c88cd360c57f691110",
+      "size": 82743,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "automaticsorter",
+      "filename": "automaticsorter-1.3.0-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/JpDckhUf/versions/STOjAOnj/automaticsorter-1.3.0-1.20.1.jar",
+      "sha1": "90f1671e168c02b79e698d0579b894f7c8e8eb29",
+      "size": 174398,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "saints-dragons",
+      "filename": "saintsdragons-0.8.2+fabric-1.20.1-alpha.jar",
+      "url": "https://cdn.modrinth.com/data/rjcsjwEU/versions/3fiKE9sg/saintsdragons-0.8.2%2Bfabric-1.20.1-alpha.jar",
+      "sha1": "07d7cb25868a3ecc6e6944ee091c659367052eea",
+      "size": 22867263,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "cardinal-components-api",
+      "filename": "cardinal-components-api-5.2.3.jar",
+      "url": "https://cdn.modrinth.com/data/K01OU20C/versions/Ielhod3p/cardinal-components-api-5.2.3.jar",
+      "sha1": "d0d687d8fc3f367bf696fa0059bccdf0591c51f4",
+      "size": 228709,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "travelersbackpack",
+      "filename": "travelersbackpack-fabric-1.20.1-9.1.53.jar",
+      "url": "https://cdn.modrinth.com/data/rlloIFEV/versions/fTwokW7g/travelersbackpack-fabric-1.20.1-9.1.53.jar",
+      "sha1": "fea3e537d3e25328ef6bc22b1325142b1f811e5c",
+      "size": 1502829,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "owo-lib",
+      "filename": "owo-lib-0.11.2+1.20.jar",
+      "url": "https://cdn.modrinth.com/data/ccKDOlHs/versions/zyOBB7J4/owo-lib-0.11.2%2B1.20.jar",
+      "sha1": "be88938ca5df78271e64bc9f85c3575754f33e2a",
+      "size": 905421,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "lavender",
+      "filename": "lavender-0.1.9+1.20.jar",
+      "url": "https://cdn.modrinth.com/data/D5h9NKNI/versions/nJIAf9uL/lavender-0.1.9%2B1.20.jar",
+      "sha1": "5803e3bc8ff760967475f0839bd4c66888f514a8",
+      "size": 523368,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "lockandblock",
+      "filename": "LockAndBlock-0.10.1+1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/CoXJchqF/versions/pyMGYGrW/LockAndBlock-0.10.1%2B1.20.1.jar",
+      "sha1": "7fd1bdb2ca42480f56ef9ad364050ada1a21416d",
+      "size": 405558,
       "required": true,
       "side": "both"
     }
@@ -489,10 +714,10 @@
   ],
 
   "server": {
-    "name": "HyServer",
+    "name": "Servidor",
     "address": "jugar.hyserver.com",
     "port": 25565,
-    "autoConnect": true
+    "autoConnect": false
   },
 
   "optionalResourcePacks": [

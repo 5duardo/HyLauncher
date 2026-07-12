@@ -13,24 +13,34 @@ import {
   FaLayerGroup,
   FaMagic,
   FaCog,
-  FaSearch,
-  FaDownload,
-  FaCheck,
 } from "react-icons/fa";
 import { Background } from "./components/Background";
 import { PlayDashboard } from "./components/PlayDashboard";
-import { ModIcon } from "./components/ModIcon";
-import { ProgressBar } from "./components/ProgressBar";
+import { type CatalogViewMode } from "./components/ViewModeToggle";
+import { CatalogTabs } from "./components/CatalogTabs";
 import { AccountSelector } from "./components/AccountSelector";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { SplashScreen } from "./components/SplashScreen";
 import { StatusBanner } from "./components/StatusBanner";
 import { useAuth } from "./hooks/useAuth";
 import { useModpack } from "./hooks/useModpack";
 import { useLaunch } from "./hooks/useLaunch";
-import { useModIcons } from "./hooks/useModIcons";
+import { useProjectIcons } from "./hooks/useProjectIcons";
 import { useI18n } from "./lib/i18n";
 import { useDiscordPresence } from "./hooks/useDiscordPresence";
 import * as cmd from "./lib/tauri-commands";
+
+const VIEW_STORAGE_KEY = "hylauncher.catalogView";
+
+function loadViewMode(): CatalogViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (v === "grid" || v === "list") return v;
+  } catch {
+    /* ignore */
+  }
+  return "list";
+}
 
 export default function App() {
   const { t, locale } = useI18n();
@@ -44,11 +54,22 @@ export default function App() {
   const [installedShaders, setInstalledShaders] = useState<Record<string, boolean>>({});
   const [optionalInstalling, setOptionalInstalling] = useState<Record<string, boolean>>({});
   const [isMaximized, setIsMaximized] = useState(false);
+  const [catalogView, setCatalogView] = useState<CatalogViewMode>(loadViewMode);
+  const [splashDone, setSplashDone] = useState(false);
+
+  const setViewMode = (mode: CatalogViewMode) => {
+    setCatalogView(mode);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+  };
 
   useDiscordPresence({
     launcherState: launch.launcherState,
     username: auth.activeAccount?.username,
-    serverName: modpack.manifest?.server.name ?? "HyServer",
+    serverName: modpack.manifest?.server.name ?? "Minecraft",
     language: locale,
   });
 
@@ -120,7 +141,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (launch.launcherState === "running") {
+    if (
+      launch.launcherState === "running" ||
+      launch.launcherState === "game_closed"
+    ) {
       setActiveTab("play");
     }
   }, [launch.launcherState]);
@@ -158,22 +182,25 @@ export default function App() {
     launch.launcherState === "verifying";
 
   const mods = modpack.manifest?.mods ?? [];
-  const { icons: modIcons } = useModIcons(mods);
-  const filteredMods = mods.filter((mod) =>
-    mod.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    mod.filename.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const { icons: modIcons } = useProjectIcons(mods);
 
   const optionalResourcePacks = modpack.manifest?.optionalResourcePacks ?? [];
+  const { icons: textureIcons } = useProjectIcons(optionalResourcePacks);
   const filteredResourcePacks = optionalResourcePacks.filter((rp) =>
     rp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     rp.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const optionalShaderPacks = modpack.manifest?.optionalShaderPacks ?? [];
+  const { icons: shaderIcons } = useProjectIcons(optionalShaderPacks);
   const filteredShaderPacks = optionalShaderPacks.filter((sp) =>
     sp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     sp.filename.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredMods = mods.filter((mod) =>
+    mod.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    mod.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const formatSize = (bytes: number) => {
@@ -203,7 +230,9 @@ export default function App() {
     }
   };
 
-  return (
+  return !splashDone ? (
+    <SplashScreen onComplete={() => setSplashDone(true)} />
+  ) : (
     <div className="app-container">
       <Background />
 
@@ -213,6 +242,8 @@ export default function App() {
           <img src="/logo.png" alt="" className="titlebar-logo" aria-hidden="true" />
           {launch.launcherState === "running"
             ? t("title.playing")
+            : launch.launcherState === "game_closed"
+            ? t("running.console")
             : activeTab === "play"
             ? t("title.play")
             : t("title.mods", { count: mods.length })}
@@ -384,325 +415,39 @@ export default function App() {
               isStoppingGame={launch.isStoppingGame}
               onPlay={handlePlay}
               onStopGame={launch.stopGame}
+              onLeaveGameConsole={launch.leaveGameConsole}
               onOpenSettings={() => setShowSettings(true)}
               onOpenMods={() => setActiveTab("mods")}
-              onOpenTextures={() => setActiveTab("textures")}
-              onOpenShaders={() => setActiveTab("shaders")}
             />
           )}
 
-          {activeTab === "mods" && (
-            <div className="mods-tab-content">
-              {/* Search and Action Bar */}
-              <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
-                <div className="mods-search-container" style={{ flex: 1 }}>
-                  <FaSearch size={14} className="mods-search-icon" />
-                  <input
-                    type="text"
-                    placeholder={t("mods.search")}
-                    className="mods-search-input"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-
-                {/* Install / Sync button */}
-                {modpack.updateDiff && modpack.updateDiff.modsToDownload.length > 0 ? (
-                  <button
-                    className="btn btn--primary btn--bar"
-                    onClick={handleInstallMods}
-                    disabled={modpack.isUpdating}
-                  >
-                    {modpack.isUpdating ? (
-                      <>
-                        <span className="spinner" />
-                        <span>{t("mods.installing", { percent: modpack.progressPercent })}</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaDownload size={14} />
-                        <span>
-                          {t("mods.installCount", {
-                            count: modpack.updateDiff.modsToDownload.length,
-                          })}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="btn btn--status btn--bar">
-                    <FaCheck size={14} />
-                    <span>{t("mods.upToDate")}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Progress bar inline during mods download */}
-              {modpack.isUpdating && modpack.progress && (
-                <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                  <ProgressBar
-                    progress={modpack.progress}
-                    label={modpack.progressLabel}
-                    percent={modpack.progressPercent}
-                  />
-                </div>
-              )}
-
-              {/* List of mods */}
-              {filteredMods.length > 0 ? (
-                <div className="mods-list-container">
-                  <div className="mods-list-scroll">
-                    <table className="mods-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                      <colgroup>
-                        <col style={{ width: '25%' }} />
-                        <col style={{ width: '38%' }} />
-                        <col style={{ width: '12%' }} />
-                        <col style={{ width: '13%' }} />
-                        <col style={{ width: '10%' }} />
-                        <col style={{ width: '12%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>{t("mods.col.mod")}</th>
-                          <th>{t("mods.col.file")}</th>
-                          <th>{t("mods.col.size")}</th>
-                          <th>{t("mods.col.type")}</th>
-                          <th>{t("mods.col.side")}</th>
-                          <th style={{ textAlign: 'right' }}>{t("mods.col.status")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredMods.map((mod) => (
-                          <tr key={mod.id}>
-                            <td>
-                              <div className="mod-row-info">
-                                <ModIcon modId={mod.id} iconUrl={modIcons[mod.id]} />
-                                <div className="mod-row-name-container">
-                                  <span className="mod-row-name" title={mod.id}>
-                                    {mod.id.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                                  </span>
-                                  <span className="mod-row-id">{mod.id}</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span className="mod-row-filename" title={mod.filename}>{mod.filename}</span>
-                            </td>
-                            <td>
-                              <span className="mod-size">{formatSize(mod.size)}</span>
-                            </td>
-                            <td>
-                              <span className={`mod-badge ${mod.required ? 'mod-badge--required' : 'mod-badge--optional'}`}>
-                                {mod.required ? t("mods.required") : t("mods.optional")}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="mod-badge mod-badge--side">{mod.side}</span>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              {isModInstalled(mod.id) ? (
-                                <span style={{ color: 'var(--color-success)', fontSize: '15px', fontWeight: 'bold' }}>✓</span>
-                              ) : (
-                                <span style={{ color: 'var(--color-error)', fontSize: '15px', fontWeight: 'bold' }}>✕</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <FaSearch size={32} />
-                  <span>{t("mods.empty")}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "textures" && (
-            <div className="mods-tab-content">
-              {/* Search Bar */}
-              <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
-                <div className="mods-search-container" style={{ flex: 1 }}>
-                  <FaSearch size={14} className="mods-search-icon" />
-                  <input
-                    type="text"
-                    placeholder={t("textures.search")}
-                    className="mods-search-input"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* List of Resource Packs */}
-              {filteredResourcePacks.length > 0 ? (
-                <div className="mods-list-container">
-                  <div className="mods-list-scroll">
-                    <table className="mods-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                      <colgroup>
-                        <col style={{ width: '40%' }} />
-                        <col style={{ width: '28%' }} />
-                        <col style={{ width: '15%' }} />
-                        <col style={{ width: '17%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>{t("textures.col.name")}</th>
-                          <th>{t("mods.col.file")}</th>
-                          <th>{t("mods.col.size")}</th>
-                          <th style={{ textAlign: 'right' }}>{t("textures.col.action")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredResourcePacks.map((rp) => {
-                          const isInstalled = installedTextures[rp.id];
-                          const isInstalling = optionalInstalling[rp.id];
-                          return (
-                            <tr key={rp.id}>
-                              <td>
-                                <div className="mod-row-info">
-                                  <div className="mod-row-icon" style={{ color: 'var(--color-cyan)' }}>
-                                    <FaLayerGroup size={16} />
-                                  </div>
-                                  <div className="mod-row-name-container">
-                                    <span className="mod-row-name" style={{ color: 'white', fontWeight: 600 }}>{rp.name}</span>
-                                    <span className="mod-row-id" style={{ fontSize: '11px', whiteSpace: 'normal', color: 'var(--color-text-secondary)', lineHeight: '1.3', marginTop: '2px' }}>{rp.description}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <span className="mod-row-filename" title={rp.filename}>{rp.filename}</span>
-                              </td>
-                              <td>
-                                <span className="mod-size">{formatSize(rp.size)}</span>
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button
-                                  className={`btn btn--sm ${isInstalled ? "btn--danger" : "btn--primary"}`}
-                                  onClick={() => handleToggleOptional(rp.id, "resourcepack")}
-                                  disabled={isInstalling}
-                                >
-                                  {isInstalling ? (
-                                    <>
-                                      <span className="spinner" />
-                                      <span>{t("action.installing")}</span>
-                                    </>
-                                  ) : isInstalled ? (
-                                    <span>{t("action.uninstall")}</span>
-                                  ) : (
-                                    <span>{t("action.install")}</span>
-                                  )}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <FaSearch size={32} />
-                  <span>{t("textures.empty")}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "shaders" && (
-            <div className="mods-tab-content">
-              {/* Search Bar */}
-              <div className="mods-action-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
-                <div className="mods-search-container" style={{ flex: 1 }}>
-                  <FaSearch size={14} className="mods-search-icon" />
-                  <input
-                    type="text"
-                    placeholder={t("shaders.search")}
-                    className="mods-search-input"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* List of Shader Packs */}
-              {filteredShaderPacks.length > 0 ? (
-                <div className="mods-list-container">
-                  <div className="mods-list-scroll">
-                    <table className="mods-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                      <colgroup>
-                        <col style={{ width: '40%' }} />
-                        <col style={{ width: '28%' }} />
-                        <col style={{ width: '15%' }} />
-                        <col style={{ width: '17%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>{t("shaders.col.name")}</th>
-                          <th>{t("mods.col.file")}</th>
-                          <th>{t("mods.col.size")}</th>
-                          <th style={{ textAlign: 'right' }}>{t("textures.col.action")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredShaderPacks.map((sp) => {
-                          const isInstalled = installedShaders[sp.id];
-                          const isInstalling = optionalInstalling[sp.id];
-                          return (
-                            <tr key={sp.id}>
-                              <td>
-                                <div className="mod-row-info">
-                                  <div className="mod-row-icon" style={{ color: 'var(--color-cyan)' }}>
-                                    <FaMagic size={16} />
-                                  </div>
-                                  <div className="mod-row-name-container">
-                                    <span className="mod-row-name" style={{ color: 'white', fontWeight: 600 }}>{sp.name}</span>
-                                    <span className="mod-row-id" style={{ fontSize: '11px', whiteSpace: 'normal', color: 'var(--color-text-secondary)', lineHeight: '1.3', marginTop: '2px' }}>{sp.description}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td>
-                                <span className="mod-row-filename" title={sp.filename}>{sp.filename}</span>
-                              </td>
-                              <td>
-                                <span className="mod-size">{formatSize(sp.size)}</span>
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button
-                                  className={`btn btn--sm ${isInstalled ? "btn--danger" : "btn--primary"}`}
-                                  onClick={() => handleToggleOptional(sp.id, "shaderpack")}
-                                  disabled={isInstalling}
-                                >
-                                  {isInstalling ? (
-                                    <>
-                                      <span className="spinner" />
-                                      <span>{t("action.installing")}</span>
-                                    </>
-                                  ) : isInstalled ? (
-                                    <span>{t("action.uninstall")}</span>
-                                  ) : (
-                                    <span>{t("action.install")}</span>
-                                  )}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--color-text-muted)', gap: '8px' }}>
-                  <FaSearch size={32} />
-                  <span>{t("shaders.empty")}</span>
-                </div>
-              )}
-            </div>
+          {(activeTab === "mods" || activeTab === "textures" || activeTab === "shaders") && (
+            <CatalogTabs
+              activeTab={activeTab}
+              catalogView={catalogView}
+              onViewChange={setViewMode}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              t={t}
+              formatSize={formatSize}
+              filteredMods={filteredMods}
+              modIcons={modIcons}
+              isModInstalled={isModInstalled}
+              updateDiff={modpack.updateDiff}
+              isUpdating={modpack.isUpdating}
+              progress={modpack.progress}
+              progressLabel={modpack.progressLabel}
+              progressPercent={modpack.progressPercent}
+              onInstallMods={handleInstallMods}
+              filteredResourcePacks={filteredResourcePacks}
+              textureIcons={textureIcons}
+              installedTextures={installedTextures}
+              filteredShaderPacks={filteredShaderPacks}
+              shaderIcons={shaderIcons}
+              installedShaders={installedShaders}
+              optionalInstalling={optionalInstalling}
+              onToggleOptional={handleToggleOptional}
+            />
           )}
         </div>
       </div>

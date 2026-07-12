@@ -8,8 +8,6 @@ import {
   FaCube,
   FaExclamationTriangle,
   FaGamepad,
-  FaLayerGroup,
-  FaMagic,
   FaServer,
 } from "react-icons/fa";
 import { PlayButton } from "./PlayButton";
@@ -32,10 +30,9 @@ interface PlayDashboardProps {
   isStoppingGame: boolean;
   onPlay: () => void;
   onStopGame: () => void;
+  onLeaveGameConsole: () => void;
   onOpenSettings: () => void;
   onOpenMods: () => void;
-  onOpenTextures?: () => void;
-  onOpenShaders?: () => void;
 }
 
 export function PlayDashboard({
@@ -52,33 +49,33 @@ export function PlayDashboard({
   isStoppingGame,
   onPlay,
   onStopGame,
+  onLeaveGameConsole,
   onOpenSettings,
   onOpenMods,
-  onOpenTextures,
-  onOpenShaders,
 }: PlayDashboardProps) {
   const { t } = useI18n();
   const mc = manifest?.minecraft ?? "1.20.1";
   const fabric = manifest?.fabricLoader ?? "";
-  const serverName = manifest?.server.name ?? "HyServer";
+  const serverName = manifest?.server.name ?? "Minecraft";
   const serverAddress = manifest?.server.address ?? "localhost";
   const serverPort = manifest?.server.port ?? 25565;
   const packName = manifest?.packName ?? "HyPack";
   const packVersion = manifest?.packVersion ?? "1.0";
   const packDesc =
     manifest?.packDescription ??
-    "Modpack del servidor con rendimiento, visuales y calidad de vida.";
-  const autoConnect = manifest?.server.autoConnect ?? true;
+    "Modpack con rendimiento, visuales y calidad de vida.";
+  const autoConnect = manifest?.server.autoConnect ?? false;
   const installedMods = Math.max(0, modsCount - missingMods);
   const syncOk = missingMods === 0;
 
-  if (launcherState === "running") {
+  if (launcherState === "running" || launcherState === "game_closed") {
     return (
       <div className="lunar-dashboard">
         <GameRunningPanel
           username={username}
-          serverName={serverName}
+          processAlive={launcherState === "running"}
           onStopGame={onStopGame}
+          onBack={onLeaveGameConsole}
           isStopping={isStoppingGame}
         />
       </div>
@@ -215,50 +212,6 @@ export function PlayDashboard({
           <span className="hy-meta-label">{t("play.pack")}</span>
           <span className="hy-meta-value">{packVersion}</span>
           <span className="hy-meta-hint">{packName}</span>
-        </div>
-      </div>
-
-      <div className="hy-quick">
-        <p className="hy-quick-title">{t("play.shortcuts")}</p>
-        <div className="hy-quick-grid">
-          <button type="button" className="hy-quick-btn" onClick={onOpenMods}>
-            <FaCube size={16} />
-            <span>
-              <strong>{t("nav.mods")}</strong>
-              <em>{t("play.modsHint")}</em>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="hy-quick-btn"
-            onClick={onOpenTextures}
-            disabled={!onOpenTextures}
-          >
-            <FaLayerGroup size={16} />
-            <span>
-              <strong>{t("nav.textures")}</strong>
-              <em>{t("play.texturesHint")}</em>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="hy-quick-btn"
-            onClick={onOpenShaders}
-            disabled={!onOpenShaders}
-          >
-            <FaMagic size={16} />
-            <span>
-              <strong>{t("nav.shaders")}</strong>
-              <em>{t("play.shadersHint")}</em>
-            </span>
-          </button>
-          <button type="button" className="hy-quick-btn" onClick={onOpenSettings}>
-            <FaCog size={16} />
-            <span>
-              <strong>{t("nav.settings")}</strong>
-              <em>{t("play.settingsHint")}</em>
-            </span>
-          </button>
         </div>
       </div>
     </div>

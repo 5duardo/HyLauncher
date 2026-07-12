@@ -64,6 +64,11 @@ export function PlayButton({
       showSpinner: false,
       className: "play-button--installing",
     },
+    game_closed: {
+      label: t("btn.launch"),
+      showSpinner: false,
+      className: "",
+    },
     error: { label: t("btn.retry"), showSpinner: false, className: "play-button--error" },
   };
 

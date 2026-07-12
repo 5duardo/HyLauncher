@@ -5,7 +5,7 @@
 use crate::auth::account_store::StoredAccount;
 use crate::utils::{error::Result, paths};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 /// Configuration for launching the game
 pub struct LaunchConfig {
@@ -19,6 +19,12 @@ pub struct LaunchConfig {
     pub vanilla_classpath: Vec<PathBuf>,
     pub fabric_classpath: Vec<PathBuf>,
     pub java_path: Option<String>,
+}
+
+/// Prefer keeping `javaw.exe` (no extra console window). Stdout/stderr are piped
+/// into the launcher UI console.
+fn launch_java_path(path: &str) -> String {
+    path.to_string()
 }
 
 /// Build and launch the Minecraft process
@@ -88,9 +94,9 @@ pub fn launch(config: &LaunchConfig) -> Result<std::process::Child> {
         game_args.push(format!("{}:{}", address, port));
     }
 
-    // Build the command
+    // Prefer javaw; if only java.exe is available that's fine too
     let java_executable = match &config.java_path {
-        Some(path) => path.clone(),
+        Some(path) => launch_java_path(path),
         None => "javaw".to_string(),
     };
     let mut cmd = Command::new(&java_executable);
@@ -135,6 +141,9 @@ pub fn launch(config: &LaunchConfig) -> Result<std::process::Child> {
 
     // Set working directory to instance
     cmd.current_dir(&instance);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::null());
 
     println!("Launching Minecraft with command:");
     println!("  Java: {}", java_executable);

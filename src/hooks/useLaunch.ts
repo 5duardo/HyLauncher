@@ -15,7 +15,16 @@ export function useLaunch() {
   // Listen for state changes from backend
   useEffect(() => {
     const unlisten = cmd.onStateChange((newState) => {
-      setLauncherState(newState as LauncherState);
+      setLauncherState((prev) => {
+        // Stay on the console page when the process ends (don't jump back to Play)
+        if (
+          newState === "ready" &&
+          (prev === "running" || prev === "game_closed")
+        ) {
+          return prev === "running" ? "game_closed" : prev;
+        }
+        return newState as LauncherState;
+      });
     });
 
     const unlistenErr = cmd.onError((err) => {
@@ -29,17 +38,17 @@ export function useLaunch() {
     };
   }, []);
 
-  // Poll for game running status
+  // Poll while game is running — on exit, stay on console page
   useEffect(() => {
     if (launcherState === "running") {
       pollRef.current = setInterval(async () => {
         const running = await cmd.isGameRunning();
         if (!running) {
-          setLauncherState("ready");
+          setLauncherState("game_closed");
           await cmd.restoreWindow();
           if (pollRef.current) clearInterval(pollRef.current);
         }
-      }, 3000);
+      }, 1000);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -63,13 +72,18 @@ export function useLaunch() {
     setError(null);
     try {
       await cmd.stopGame();
-      setLauncherState("ready");
+      // Keep console visible after manual stop
+      setLauncherState("game_closed");
       await cmd.restoreWindow();
     } catch (err) {
       setError(String(err));
     } finally {
       setIsStoppingGame(false);
     }
+  }, []);
+
+  const leaveGameConsole = useCallback(() => {
+    setLauncherState("ready");
   }, []);
 
   const fullSetup = useCallback(async () => {
@@ -116,6 +130,7 @@ export function useLaunch() {
     isStoppingGame,
     launch,
     stopGame,
+    leaveGameConsole,
     fullSetup,
     clearError,
     setLauncherState,
