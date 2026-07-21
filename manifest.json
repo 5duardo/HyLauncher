@@ -1,5 +1,5 @@
 {
-  "packVersion": "1.2.9",
+  "packVersion": "1.3.1",
   "packName": "HyPack",
   "packDescription": "Modpack oficial — rendimiento, visuales y QoL",
   "minecraft": "1.20.1",
@@ -868,6 +868,42 @@
       "url": "https://cdn.modrinth.com/data/1XSEiZPP/versions/tbRkbkoy/IMPR-Fabric-3.23.3-1.20.1-1.20.1.jar",
       "sha1": "7a5bbe19c00227bef36f2b312d026c60b45bda0f",
       "size": 10342092,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "viltrumite-flight",
+      "filename": "viltrumiteflight-1.4.4.jar",
+      "url": "https://cdn.modrinth.com/data/KzZmszIP/versions/luhmWlst/viltrumiteflight-1.4.4.jar",
+      "sha1": "f35850210194f2466cb0713018cedc11d48f6371",
+      "size": 335026,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "viltrumite",
+      "filename": "viltrumitecore-1.5.1.jar",
+      "url": "https://cdn.modrinth.com/data/qEZofcZM/versions/Dd4p9CkZ/viltrumitecore-1.5.1.jar",
+      "sha1": "c1d6345ea593fd4eb741be621b2dfe4c8830293d",
+      "size": 700271,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "horror-messages",
+      "filename": "horrormessages-1.0.1-fabric-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/dxrOAhj5/versions/19hbrXn8/horrormessages-1.0.1-fabric-1.20.1.jar",
+      "sha1": "31fbf44251803cf23588351d635b56afaaea0918",
+      "size": 18377,
+      "required": true,
+      "side": "both"
+    },
+    {
+      "id": "kenny",
+      "filename": "Kenny-5.0.0+fabric-1.20.1.jar",
+      "url": "https://cdn.modrinth.com/data/1qMrluiH/versions/tMr0eS33/Kenny-5.0.0%2Bfabric-1.20.1.jar",
+      "sha1": "dcb0af5e25340a0f36b70f2fe93e397cf0d38db8",
+      "size": 3591895,
       "required": true,
       "side": "both"
     }
