@@ -960,15 +960,17 @@ fn open_path(path: &std::path::Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_app_version() -> String {
-    updater::current_version()
+fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 #[tauri::command]
 async fn check_for_launcher_update(
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<updater::UpdateCheckResult, LauncherError> {
-    updater::check_for_update(&state.http_client).await
+    let current = app.package_info().version.to_string();
+    updater::check_for_update(&state.http_client, &current).await
 }
 
 #[tauri::command]
@@ -976,7 +978,8 @@ async fn install_launcher_update(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<String, LauncherError> {
-    let check = updater::check_for_update(&state.http_client).await?;
+    let current = app.package_info().version.to_string();
+    let check = updater::check_for_update(&state.http_client, &current).await?;
     if !check.update_available {
         return Err(LauncherError::Other(
             "No hay una actualización disponible".to_string(),

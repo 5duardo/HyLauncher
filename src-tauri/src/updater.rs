@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 const GITHUB_REPO: &str = "5duardo/HyLauncher";
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Deserialize)]
 struct GhRelease {
@@ -88,11 +87,10 @@ fn pick_windows_asset(assets: &[GhAsset]) -> Option<&GhAsset> {
     })
 }
 
-pub fn current_version() -> String {
-    CURRENT_VERSION.to_string()
-}
-
-pub async fn check_for_update(client: &Client) -> Result<UpdateCheckResult, LauncherError> {
+pub async fn check_for_update(
+    client: &Client,
+    current: &str,
+) -> Result<UpdateCheckResult, LauncherError> {
     let repo = std::env::var("GITHUB_REPO").unwrap_or_else(|_| GITHUB_REPO.to_string());
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
 
@@ -110,8 +108,8 @@ pub async fn check_for_update(client: &Client) -> Result<UpdateCheckResult, Laun
     if release.draft {
         return Ok(UpdateCheckResult {
             update_available: false,
-            current_version: current_version(),
-            latest_version: current_version(),
+            current_version: current.to_string(),
+            latest_version: current.to_string(),
             release_name: String::new(),
             release_notes: String::new(),
             html_url: release.html_url,
@@ -122,7 +120,7 @@ pub async fn check_for_update(client: &Client) -> Result<UpdateCheckResult, Laun
     }
 
     let latest = normalize_version(&release.tag_name);
-    let current = current_version();
+    let current = normalize_version(current);
     let update_available = cmp_versions(&latest, &current) == Ordering::Greater;
     let asset = pick_windows_asset(&release.assets);
 
