@@ -108,12 +108,13 @@ pub struct Arguments {
 
 // ---- Implementation ----
 
-/// Check if Minecraft 1.20.1 client is fully installed
-pub fn is_installed(mc_version: &str) -> bool {
-    let client_jar = paths::versions_dir()
+/// Check if a Minecraft client is fully installed inside a pack instance.
+pub fn is_installed(mc_version: &str, pack: &paths::PackPaths) -> bool {
+    let client_jar = pack
+        .versions_dir()
         .join(mc_version)
         .join(format!("{}.jar", mc_version));
-    let asset_index = paths::assets_dir().join("indexes");
+    let asset_index = pack.assets_dir().join("indexes");
 
     client_jar.exists() && asset_index.exists()
 }
@@ -123,6 +124,7 @@ pub async fn install(
     client: &Client,
     mc_version: &str,
     app_handle: &tauri::AppHandle,
+    pack: &paths::PackPaths,
 ) -> Result<VersionJson> {
     log::info!("Fetching Mojang version manifest...");
 
@@ -141,7 +143,7 @@ pub async fn install(
     let version_json: VersionJson = http::download_json(client, &version_entry.url).await?;
 
     // 3. Download client JAR
-    let client_dir = paths::versions_dir().join(mc_version);
+    let client_dir = pack.versions_dir().join(mc_version);
     std::fs::create_dir_all(&client_dir)?;
     let client_jar = client_dir.join(format!("{}.jar", mc_version));
 
@@ -174,7 +176,7 @@ pub async fn install(
     for (i, lib) in applicable_libs.iter().enumerate() {
         if let Some(ref downloads) = lib.downloads {
             if let Some(ref artifact) = downloads.artifact {
-                let lib_path = paths::libraries_dir().join(&artifact.path);
+                let lib_path = pack.libraries_dir().join(&artifact.path);
                 if !lib_path.exists() || needs_redownload(&lib_path, &artifact.sha1).await {
                     let _ = app_handle.emit("progress", serde_json::json!({
                         "stage": "downloading_libraries",
@@ -197,7 +199,7 @@ pub async fn install(
     }
 
     // 5. Download asset index
-    let index_dir = paths::assets_dir().join("indexes");
+    let index_dir = pack.assets_dir().join("indexes");
     std::fs::create_dir_all(&index_dir)?;
     let index_file = index_dir.join(format!("{}.json", version_json.asset_index.id));
 
@@ -217,7 +219,7 @@ pub async fn install(
     let asset_index: AssetIndexJson = serde_json::from_str(&index_data)?;
 
     let total_assets = asset_index.objects.len();
-    let objects_dir = paths::assets_dir().join("objects");
+    let objects_dir = pack.assets_dir().join("objects");
     std::fs::create_dir_all(&objects_dir)?;
 
     for (i, (_name, obj)) in asset_index.objects.iter().enumerate() {
@@ -294,7 +296,10 @@ async fn needs_redownload(path: &PathBuf, expected_sha1: &str) -> bool {
 }
 
 /// Get the classpath for all vanilla libraries
-pub fn get_vanilla_classpath(version_json: &VersionJson) -> Vec<PathBuf> {
+pub fn get_vanilla_classpath(
+    version_json: &VersionJson,
+    pack: &paths::PackPaths,
+) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
     for lib in &version_json.libraries {
@@ -303,14 +308,14 @@ pub fn get_vanilla_classpath(version_json: &VersionJson) -> Vec<PathBuf> {
         }
         if let Some(ref downloads) = lib.downloads {
             if let Some(ref artifact) = downloads.artifact {
-                paths.push(paths::libraries_dir().join(&artifact.path));
+                paths.push(pack.libraries_dir().join(&artifact.path));
             }
         }
     }
 
     // Add client JAR
     paths.push(
-        paths::versions_dir()
+        pack.versions_dir()
             .join(&version_json.id)
             .join(format!("{}.jar", version_json.id)),
     );

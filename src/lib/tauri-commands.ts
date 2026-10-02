@@ -8,8 +8,10 @@ import type {
   DeviceCodeResponse,
   LauncherSettings,
   LauncherUpdateCheck,
+  ModpackSummary,
   PackManifest,
   ProgressEvent,
+  SessionVerification,
   StorageInfo,
   UpdateDiff,
 } from "./types";
@@ -56,28 +58,51 @@ export async function getActiveAccount(): Promise<Account | null> {
   return invoke("get_active_account");
 }
 
-// ---- Modpack / Manifest ----
+/**
+ * Verifica la sesión premium: perfil + propiedad de Minecraft.
+ * Renueva el token solo si caducó. Las offline devuelven valid sin red.
+ */
+export async function verifyPremiumSession(accountId?: string): Promise<SessionVerification> {
+  return invoke("verify_premium_session", { accountId: accountId ?? null });
+}
+
+// ---- Modpacks (registry + per-pack manifests) ----
+
+/** List of available modpacks from `modpacks.json` */
+export async function getModpacks(): Promise<ModpackSummary[]> {
+  return invoke("get_modpacks");
+}
+
+/** The user-selected modpack (null until the user picks one) */
+export async function getActivePack(): Promise<ModpackSummary | null> {
+  return invoke("get_active_pack");
+}
+
+/** Select a modpack (persists + prepares its isolated instance) */
+export async function setActivePack(packId: string): Promise<ModpackSummary> {
+  return invoke("set_active_pack", { packId });
+}
 
 /** Check for updates by comparing remote vs local manifest */
-export async function checkForUpdates(): Promise<UpdateDiff | null> {
-  return invoke("check_for_updates");
+export async function checkForUpdates(packId?: string): Promise<UpdateDiff | null> {
+  return invoke("check_for_updates", { packId: packId ?? null });
 }
 
 /** Get the current local manifest */
-export async function getLocalManifest(): Promise<PackManifest | null> {
-  return invoke("get_local_manifest");
+export async function getLocalManifest(packId?: string): Promise<PackManifest | null> {
+  return invoke("get_local_manifest", { packId: packId ?? null });
 }
 
 /** Execute the update/install based on a diff */
-export async function executeUpdate(): Promise<void> {
-  return invoke("execute_update");
+export async function executeUpdate(packId?: string): Promise<void> {
+  return invoke("execute_update", { packId: packId ?? null });
 }
 
-export async function reinstallMods(): Promise<{
+export async function reinstallMods(packId?: string): Promise<{
   reinstalled: number;
   totalDownloadSize: number;
 }> {
-  return invoke("reinstall_mods");
+  return invoke("reinstall_mods", { packId: packId ?? null });
 }
 
 /** Fetch Modrinth icon URLs for a list of mods */
@@ -90,18 +115,18 @@ export async function getModIcons(
 // ---- Minecraft ----
 
 /** Check if Minecraft + Fabric is fully installed */
-export async function isMinecraftInstalled(): Promise<boolean> {
-  return invoke("is_minecraft_installed");
+export async function isMinecraftInstalled(packId?: string): Promise<boolean> {
+  return invoke("is_minecraft_installed", { packId: packId ?? null });
 }
 
 /** Install Minecraft + Fabric from scratch */
-export async function installMinecraft(): Promise<void> {
-  return invoke("install_minecraft");
+export async function installMinecraft(packId?: string): Promise<void> {
+  return invoke("install_minecraft", { packId: packId ?? null });
 }
 
 /** Launch the game */
-export async function launchGame(): Promise<void> {
-  return invoke("launch_game");
+export async function launchGame(packId?: string): Promise<void> {
+  return invoke("launch_game", { packId: packId ?? null });
 }
 
 /** Check if the game process is still running */
@@ -126,9 +151,9 @@ export async function isJavaAvailable(): Promise<boolean> {
   return invoke("is_java_available");
 }
 
-/** Download and install Java runtime */
-export async function installJava(): Promise<void> {
-  return invoke("install_java");
+/** Download and install Java runtime (major según el pack) */
+export async function installJava(packId?: string): Promise<void> {
+  return invoke("install_java", { packId: packId ?? null });
 }
 
 // ---- Settings ----
@@ -183,9 +208,10 @@ export async function clearLauncherLogs(): Promise<number> {
 
 /** Open a launcher folder in the OS file manager */
 export async function openStorageFolder(
-  which: "launcher" | "instance" | "cache" | "java" | "data"
+  which: "launcher" | "instance" | "cache" | "java" | "data",
+  packId?: string
 ): Promise<void> {
-  return invoke("open_storage_folder", { which });
+  return invoke("open_storage_folder", { which, packId: packId ?? null });
 }
 
 /** App version from Cargo.toml */
@@ -265,19 +291,20 @@ export function onError(
 
 // ---- Optional Components (Shaders & Texture Packs) ----
 
-export async function checkOptionalFile(folderType: string, filename: string): Promise<boolean> {
-  return invoke("check_optional_file", { folderType, filename });
+export async function checkOptionalFile(folderType: string, filename: string, packId?: string): Promise<boolean> {
+  return invoke("check_optional_file", { folderType, filename, packId: packId ?? null });
 }
 
 export async function downloadOptionalFile(
   url: string,
   folderType: string,
   filename: string,
-  sha1: string
+  sha1: string,
+  packId?: string
 ): Promise<void> {
-  return invoke("download_optional_file", { url, folderType, filename, sha1 });
+  return invoke("download_optional_file", { url, folderType, filename, sha1, packId: packId ?? null });
 }
 
-export async function deleteOptionalFile(folderType: string, filename: string): Promise<void> {
-  return invoke("delete_optional_file", { folderType, filename });
+export async function deleteOptionalFile(folderType: string, filename: string, packId?: string): Promise<void> {
+  return invoke("delete_optional_file", { folderType, filename, packId: packId ?? null });
 }

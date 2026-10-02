@@ -9,6 +9,9 @@ pub enum LauncherError {
     #[error("HTTP request failed: {0}")]
     Http(#[from] reqwest::Error),
 
+    #[error("CDN rate limit, reintentando {url} (espera {retry_after_secs}s)")]
+    RateLimited { url: String, retry_after_secs: u64 },
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

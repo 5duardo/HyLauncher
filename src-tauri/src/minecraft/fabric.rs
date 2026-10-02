@@ -73,6 +73,7 @@ pub async fn install(
     mc_version: &str,
     loader_version: &str,
     app_handle: &tauri::AppHandle,
+    pack: &paths::PackPaths,
 ) -> Result<FabricProfile> {
     let _ = app_handle.emit("progress", serde_json::json!({
         "stage": "installing_fabric",
@@ -91,7 +92,7 @@ pub async fn install(
     let profile: FabricProfile = http::download_json(client, &profile_url).await?;
 
     // 2. Save the profile JSON to the versions directory
-    let version_dir = paths::versions_dir().join(&profile.id);
+    let version_dir = pack.versions_dir().join(&profile.id);
     std::fs::create_dir_all(&version_dir)?;
 
     let profile_path = version_dir.join(format!("{}.json", profile.id));
@@ -109,7 +110,7 @@ pub async fn install(
     let total = profile.libraries.len();
     for (i, lib) in profile.libraries.iter().enumerate() {
         let lib_path = maven_name_to_path(&lib.name);
-        let full_path = paths::libraries_dir().join(&lib_path);
+        let full_path = pack.libraries_dir().join(&lib_path);
 
         if full_path.exists() {
             continue;
@@ -196,10 +197,13 @@ pub fn maven_name_to_path(name: &str) -> String {
 }
 
 /// Get the classpath for Fabric libraries
-pub fn get_fabric_classpath(profile: &FabricProfile) -> Vec<PathBuf> {
+pub fn get_fabric_classpath(
+    profile: &FabricProfile,
+    pack: &paths::PackPaths,
+) -> Vec<PathBuf> {
     profile
         .libraries
         .iter()
-        .map(|lib| paths::libraries_dir().join(maven_name_to_path(&lib.name)))
+        .map(|lib| pack.libraries_dir().join(maven_name_to_path(&lib.name)))
         .collect()
 }

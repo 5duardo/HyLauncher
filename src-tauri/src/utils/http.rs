@@ -10,9 +10,14 @@ use crate::utils::error::{LauncherError, Result};
 /// Create a shared HTTP client with reasonable defaults
 pub fn create_client() -> Result<Client> {
     Client::builder()
-        .user_agent("HyLauncher/1.0.0")
+        .user_agent(concat!(
+            "HyLauncher/",
+            env!("CARGO_PKG_VERSION"),
+            " (+https://github.com/5duardo/HyLauncher)"
+        ))
         .timeout(std::time::Duration::from_secs(300))
         .connect_timeout(std::time::Duration::from_secs(15))
+        .pool_max_idle_per_host(8)
         .build()
         .map_err(LauncherError::Http)
 }
@@ -30,7 +35,14 @@ pub async fn download_file(
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    let response = client.get(url).send().await?.error_for_status()?;
+    let response = client.get(url).send().await?;
+    // 429/5xx: no consumir el error todavía, el retry necesita Retry-After.
+    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || response.status().is_server_error()
+    {
+        return Err(rate_limit_error(url, &response));
+    }
+    let response = response.error_for_status()?;
     let bytes = response.bytes().await?;
     let len = bytes.len() as u64;
 
@@ -79,7 +91,43 @@ pub async fn compute_file_sha1(path: &Path) -> Result<String> {
     Ok(compute_sha1(&data))
 }
 
-/// Download with retries (up to max_retries)
+/// Error de rate-limit con los segundos que pide el servidor (Retry-After).
+fn rate_limit_error(url: &str, response: &reqwest::Response) -> LauncherError {
+    let wait = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(0)
+        .min(60);
+    LauncherError::RateLimited {
+        url: url.to_string(),
+        retry_after_secs: wait,
+    }
+}
+
+fn is_retryable(e: &LauncherError) -> bool {
+    match e {
+        LauncherError::RateLimited { .. } => true,
+        LauncherError::Http(e) => {
+            e.is_timeout() || e.is_connect() || e.is_body() || e.is_decode()
+                || e.status().map(|s| s == reqwest::StatusCode::TOO_MANY_REQUESTS || s.is_server_error()).unwrap_or(false)
+        }
+        LauncherError::Io(_) => true,
+        _ => false,
+    }
+}
+
+fn jitter_ms() -> u64 {
+    // Sin crate rand: nanos del reloj como jitter barato.
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| (d.subsec_nanos() % 700) as u64)
+        .unwrap_or(250)
+}
+
+/// Download with retries: backoff exponencial + respeta Retry-After (429/503).
+/// Los 429 de Modrinth en descargas múltiples se absorben aquí.
 pub async fn download_file_with_retry(
     client: &Client,
     url: &str,
@@ -92,17 +140,37 @@ pub async fn download_file_with_retry(
         match download_file(client, url, dest, expected_sha1).await {
             Ok(bytes) => return Ok(bytes),
             Err(e) => {
+                let retryable = is_retryable(&e);
                 log::warn!(
-                    "Download attempt {}/{} failed for {}: {}",
+                    "Download attempt {}/{} failed for {}: {} (retryable={})",
                     attempt + 1,
                     max_retries + 1,
                     url,
-                    e
+                    e,
+                    retryable
                 );
                 last_error = Some(e);
-                if attempt < max_retries {
-                    tokio::time::sleep(std::time::Duration::from_secs(2u64.pow(attempt))).await;
+                if attempt >= max_retries {
+                    break;
                 }
+                let Some(err) = last_error.as_ref() else {
+                    break;
+                };
+                if !retryable {
+                    break;
+                }
+                // Si el CDN pidió espera, obedecerla; si no, backoff 1s/2s/4s... (tope 30s) + jitter.
+                let mut wait = std::time::Duration::from_secs(1u64 << attempt.min(5))
+                    + std::time::Duration::from_millis(jitter_ms());
+                if let LauncherError::RateLimited { retry_after_secs, .. } = err {
+                    if *retry_after_secs > 0 {
+                        wait = std::time::Duration::from_secs((*retry_after_secs).min(60));
+                    }
+                }
+                if wait > std::time::Duration::from_secs(30) {
+                    wait = std::time::Duration::from_secs(30) + std::time::Duration::from_millis(jitter_ms());
+                }
+                tokio::time::sleep(wait).await;
             }
         }
     }

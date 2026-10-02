@@ -1,0 +1,14 @@
+{
+  "packs": [
+    {
+      "id": "keo-vanilla",
+      "name": "HYNILLA",
+      "description": "Experiencia vainilla suave y estética: visuales refinados y detalles acogedores sin cambiar el juego base. 140 mods, 76 texturas y shaders opcionales.",
+      "minecraft": "1.21.11",
+      "fabricLoader": "0.19.3",
+      "iconUrl": null,
+      "manifestUrl": "https://raw.githubusercontent.com/5duardo/HyLauncher/main/manifest-keo-vanilla.json",
+      "packVersion": "4.2.0"
+    }
+  ]
+}

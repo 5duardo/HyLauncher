@@ -55,11 +55,16 @@ export function useLaunch() {
     };
   }, [launcherState]);
 
-  const launch = useCallback(async () => {
+  const launch = useCallback(async (packId?: string | null) => {
     setError(null);
+    if (!packId) {
+      setError("No hay ningún modpack seleccionado. Elige uno en la pestaña Modpacks.");
+      setLauncherState("error");
+      return;
+    }
     setLauncherState("launching");
     try {
-      await cmd.launchGame();
+      await cmd.launchGame(packId);
       setLauncherState("running");
     } catch (err) {
       setError(String(err));
@@ -86,28 +91,34 @@ export function useLaunch() {
     setLauncherState("ready");
   }, []);
 
-  const fullSetup = useCallback(async () => {
+  const fullSetup = useCallback(async (packId?: string | null) => {
     setError(null);
 
     try {
-      // 1. Check Java
+      // 1. Check Java (global, no depende del pack)
       setLauncherState("checking");
       const javaOk = await cmd.isJavaAvailable();
       if (!javaOk) {
         setLauncherState("installing");
-        await cmd.installJava();
+        await cmd.installJava(packId ?? undefined);
       }
 
-      // 2. Check Minecraft
-      const mcOk = await cmd.isMinecraftInstalled();
+      // Sin pack seleccionado no hay nada que instalar.
+      if (!packId) {
+        setLauncherState("idle");
+        return;
+      }
+
+      // 2. Check Minecraft (instancia del pack)
+      const mcOk = await cmd.isMinecraftInstalled(packId);
       if (!mcOk) {
         setLauncherState("installing");
-        await cmd.installMinecraft();
+        await cmd.installMinecraft(packId);
       }
 
       // 3. Check modpack updates
       setLauncherState("checking");
-      const diff = await cmd.checkForUpdates();
+      const diff = await cmd.checkForUpdates(packId);
       if (diff && diff.modsToDownload.length > 0) {
         setLauncherState("needs_update");
       } else {

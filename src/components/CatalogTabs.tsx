@@ -38,6 +38,8 @@ interface CatalogTabsProps {
   installedShaders: Record<string, boolean>;
   optionalInstalling: Record<string, boolean>;
   onToggleOptional: (id: string, type: "resourcepack" | "shaderpack") => void;
+  onInstallAllTextures: () => void;
+  onInstallAllShaders: () => void;
 }
 
 export function CatalogTabs(props: CatalogTabsProps) {
@@ -67,7 +69,16 @@ export function CatalogTabs(props: CatalogTabsProps) {
     installedShaders,
     optionalInstalling,
     onToggleOptional,
+    onInstallAllTextures,
+    onInstallAllShaders,
   } = props;
+
+  // Todo lo pendiente del pack (mods + configs + texturas + shaders incluidos).
+  const pendingTotal =
+    (updateDiff?.modsToDownload.length ?? 0) +
+    (updateDiff?.configsToUpdate.length ?? 0) +
+    (updateDiff?.resourcePacksToUpdate ?? 0) +
+    (updateDiff?.shaderPacksToUpdate ?? 0);
 
   const viewToggle = (
     <ViewModeToggle
@@ -103,7 +114,7 @@ export function CatalogTabs(props: CatalogTabsProps) {
             {isUpdating ? <span className="spinner" /> : <FaRedo size={13} />}
             <span>{t("mods.reinstall")}</span>
           </button>
-          {updateDiff && updateDiff.modsToDownload.length > 0 ? (
+          {updateDiff && pendingTotal > 0 ? (
             <button
               className="btn btn--primary btn--bar"
               onClick={onInstallMods}
@@ -118,7 +129,7 @@ export function CatalogTabs(props: CatalogTabsProps) {
                 <>
                   <FaDownload size={14} />
                   <span>
-                    {t("mods.installCount", { count: updateDiff.modsToDownload.length })}
+                    {t("mods.installCount", { count: pendingTotal })}
                   </span>
                 </>
               )}
@@ -259,6 +270,7 @@ export function CatalogTabs(props: CatalogTabsProps) {
   if (activeTab === "textures") {
     return (
       <OptionalPackCatalog
+        onInstallAll={onInstallAllTextures}
         searchPlaceholder={t("textures.search")}
         emptyLabel={t("textures.empty")}
         nameCol={t("textures.col.name")}
@@ -282,6 +294,7 @@ export function CatalogTabs(props: CatalogTabsProps) {
 
   return (
     <OptionalPackCatalog
+      onInstallAll={onInstallAllShaders}
       searchPlaceholder={t("shaders.search")}
       emptyLabel={t("shaders.empty")}
       nameCol={t("shaders.col.name")}
@@ -321,6 +334,7 @@ function OptionalPackCatalog({
   formatSize,
   t,
   onToggle,
+  onInstallAll,
 }: {
   searchPlaceholder: string;
   emptyLabel: string;
@@ -337,9 +351,12 @@ function OptionalPackCatalog({
   searchQuery: string;
   onSearchChange: (q: string) => void;
   formatSize: (n: number) => string;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
   onToggle: (id: string) => void;
+  onInstallAll: () => void;
 }) {
+  const missingCount = packs.filter((p) => !installed[p.id]).length;
+  const anyInstalling = packs.some((p) => installing[p.id]);
   return (
     <div className="mods-tab-content">
       <div className="mods-action-bar">
@@ -354,6 +371,32 @@ function OptionalPackCatalog({
           />
         </div>
         {viewToggle}
+        {packs.length > 0 &&
+          (missingCount > 0 ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--bar"
+              onClick={onInstallAll}
+              disabled={anyInstalling}
+            >
+              {anyInstalling ? (
+                <>
+                  <span className="spinner" />
+                  <span>{t("action.installing")}</span>
+                </>
+              ) : (
+                <>
+                  <FaDownload size={14} />
+                  <span>{t("action.installAll", { count: missingCount })}</span>
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="btn btn--status btn--bar">
+              <FaCheck size={14} />
+              <span>{t("action.allInstalled")}</span>
+            </div>
+          ))}
       </div>
 
       {packs.length > 0 ? (

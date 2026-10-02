@@ -70,6 +70,18 @@ export const STAGE_LABELS: Record<ProgressStage, string> = {
   verifying: "Verificando integridad...",
 };
 
+/** Modpack registry entry (`modpacks.json`) */
+export interface ModpackSummary {
+  id: string;
+  name: string;
+  description: string;
+  minecraft: string;
+  fabricLoader?: string | null;
+  iconUrl?: string | null;
+  manifestUrl: string;
+  packVersion?: string | null;
+}
+
 /** Remote manifest types */
 export interface PackManifest {
   packVersion: string;
@@ -143,6 +155,15 @@ export interface JavaConfig {
   version: number;
   downloadUrl: string;
   sha1?: string;
+}
+
+/** Resultado de verificar una sesión premium */
+export interface SessionVerification {
+  valid: boolean;
+  mode: string;
+  username?: string;
+  uuid?: string;
+  refreshed?: boolean;
 }
 
 /** Microsoft auth device code response */

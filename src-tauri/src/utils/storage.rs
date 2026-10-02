@@ -5,7 +5,7 @@
 use crate::utils::paths;
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(Debug, Serialize)]
@@ -34,11 +34,15 @@ fn dir_size(path: &Path) -> u64 {
 }
 
 pub fn collect_storage_info() -> StorageInfo {
-    let instance = dir_size(&paths::instance_dir());
+    // Todas las instancias de modpacks (`instances/<packId>/`).
+    let instance = dir_size(&paths::instances_root());
     let cache = dir_size(&paths::cache_dir());
     let java = dir_size(&paths::java_dir());
     let data = dir_size(&paths::launcher_data_dir());
-    let logs = dir_size(&paths::instance_dir().join("logs"));
+    let mut logs = 0u64;
+    for inst in instance_targets() {
+        logs += dir_size(&inst.join("logs"));
+    }
 
     StorageInfo {
         launcher_root: paths::launcher_root().display().to_string(),
@@ -61,17 +65,31 @@ pub fn clear_cache() -> Result<u64, String> {
     Ok(before)
 }
 
-pub fn clear_logs() -> Result<u64, String> {
-    let logs = paths::instance_dir().join("logs");
-    let before = dir_size(&logs);
-    if logs.exists() {
-        fs::remove_dir_all(&logs).map_err(|e| e.to_string())?;
+/// Todas las carpetas de instancia: `instances/<packId>/`.
+fn instance_targets() -> Vec<PathBuf> {
+    let mut targets = Vec::new();
+    if let Ok(entries) = fs::read_dir(paths::instances_root()) {
+        for entry in entries.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                targets.push(entry.path());
+            }
+        }
     }
-    fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
-    let crash = paths::instance_dir().join("crash-reports");
-    if crash.exists() {
-        let _ = fs::remove_dir_all(&crash);
-        let _ = fs::create_dir_all(&crash);
+    targets
+}
+
+pub fn clear_logs() -> Result<u64, String> {
+    let mut before = 0u64;
+    // Limpia logs/crash-reports de todas las instancias de modpacks.
+    for inst in instance_targets() {
+        for sub in ["logs", "crash-reports"] {
+            let dir = inst.join(sub);
+            before += dir_size(&dir);
+            if dir.exists() {
+                let _ = fs::remove_dir_all(&dir);
+                let _ = fs::create_dir_all(&dir);
+            }
+        }
     }
     Ok(before)
 }

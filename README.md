@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://byhyped.com">byhyped.com</a>
   ·
-  Minecraft 1.20.1
+  Minecraft 1.21.11
   ·
   Fabric
 </p>

@@ -1,6 +1,10 @@
 // ============================================================
 // HyLauncher — useModpack Hook
 // ============================================================
+//
+// Todo el estado del modpack está ligado a un pack concreto: si no
+// hay pack seleccionado (`activePackId === null`) no se consulta ni
+// se descarga nada.
 
 import { useState, useEffect, useCallback } from "react";
 import type { ProgressEvent, UpdateDiff, PackManifest } from "../lib/types";
@@ -17,7 +21,7 @@ interface ModpackState {
   error: string | null;
 }
 
-export function useModpack() {
+export function useModpack(activePackId: string | null) {
   const [state, setState] = useState<ModpackState>({
     manifest: null,
     updateDiff: null,
@@ -43,13 +47,26 @@ export function useModpack() {
     };
   }, []);
 
+  // Al cambiar de modpack, olvida el estado del pack anterior.
+  useEffect(() => {
+    setState((s) => ({
+      ...s,
+      manifest: null,
+      updateDiff: null,
+      error: null,
+      progress: null,
+    }));
+  }, [activePackId]);
+
   const checkForUpdates = useCallback(async () => {
+    if (!activePackId) return null;
+
     setState((s) => ({ ...s, isChecking: true, error: null }));
-    
+
     // 1. Try to load local manifest first so we have it immediately
     let manifest = null;
     try {
-      manifest = await cmd.getLocalManifest();
+      manifest = await cmd.getLocalManifest(activePackId);
     } catch (e) {
       console.error("Failed to load local manifest:", e);
     }
@@ -58,9 +75,9 @@ export function useModpack() {
     let diff = null;
     let updateError = null;
     try {
-      diff = await cmd.checkForUpdates();
+      diff = await cmd.checkForUpdates(activePackId);
       // Fetch manifest again from the backend's memory cache that checkForUpdates populated
-      manifest = await cmd.getLocalManifest();
+      manifest = await cmd.getLocalManifest(activePackId);
     } catch (e) {
       console.error("Failed to check for updates:", e);
       updateError = String(e);
@@ -76,13 +93,14 @@ export function useModpack() {
     }));
 
     return diff;
-  }, []);
+  }, [activePackId]);
 
   const executeUpdate = useCallback(async () => {
+    if (!activePackId) return;
     setState((s) => ({ ...s, isUpdating: true, error: null, progress: null }));
     try {
-      await cmd.executeUpdate();
-      const manifest = await cmd.getLocalManifest();
+      await cmd.executeUpdate(activePackId);
+      const manifest = await cmd.getLocalManifest(activePackId);
       setState((s) => ({
         ...s,
         manifest,
@@ -97,14 +115,15 @@ export function useModpack() {
         isUpdating: false,
       }));
     }
-  }, []);
+  }, [activePackId]);
 
   const reinstallMods = useCallback(async () => {
+    if (!activePackId) return;
     setState((s) => ({ ...s, isUpdating: true, error: null, progress: null }));
     try {
-      await cmd.reinstallMods();
-      const manifest = await cmd.getLocalManifest();
-      const diff = await cmd.checkForUpdates();
+      await cmd.reinstallMods(activePackId);
+      const manifest = await cmd.getLocalManifest(activePackId);
+      const diff = await cmd.checkForUpdates(activePackId);
       setState((s) => ({
         ...s,
         manifest,
@@ -120,7 +139,7 @@ export function useModpack() {
       }));
       throw err;
     }
-  }, []);
+  }, [activePackId]);
 
   const clearError = useCallback(() => {
     setState((s) => ({ ...s, error: null }));
@@ -139,4 +158,4 @@ export function useModpack() {
     reinstallMods,
     clearError,
   };
-}
+}

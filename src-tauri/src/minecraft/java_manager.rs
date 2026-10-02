@@ -1,5 +1,5 @@
 // ============================================================
-// HyLauncher — Java Runtime Manager (Temurin 17 for MC 1.20.1)
+// HyLauncher — Java Runtime Manager (Temurin por major: 21 para HYNILLA)
 // ============================================================
 
 use crate::utils::{
@@ -15,8 +15,11 @@ use tauri::{AppHandle, Emitter};
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
-const ADOPTIUM_JRE17_URL: &str =
-    "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jre/hotspot/normal/eclipse";
+fn adoptium_jre_url(major: u32) -> String {
+    format!(
+        "https://api.adoptium.net/v3/binary/latest/{major}/ga/windows/x64/jre/hotspot/normal/eclipse"
+    )
+}
 
 /// True when a compatible Java 17–21 runtime can be resolved.
 pub fn is_java_available() -> bool {
@@ -51,27 +54,47 @@ pub fn resolve_java_executable(override_path: Option<&str>) -> Result<String> {
     ))
 }
 
-/// Download Eclipse Temurin 17 JRE into %APPDATA%/HyLauncher/java
-pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
+/// Major de Java requerido por defecto.
+const DEFAULT_JAVA_MAJOR: u32 = 17;
+
+/// Qué major necesita cada versión de Minecraft.
+pub fn required_java_major_for_mc(mc_version: &str) -> u32 {
+    // 1.20.5+ y 1.21.x exigen Java 21.
+    let needs_21 = mc_version
+        .split('.')
+        .map(|s| s.parse::<u32>().unwrap_or(0))
+        .collect::<Vec<_>>();
+    match needs_21.as_slice() {
+        [1, minor, ..] if *minor >= 21 => 21,
+        [1, 20, patch, ..] if *patch >= 5 => 21,
+        [major, ..] if *major > 1 => 21,
+        _ => DEFAULT_JAVA_MAJOR,
+    }
+}
+
+/// Download Eclipse Temurin JRE into %APPDATA%/HyLauncher/java/<major>.
+/// Cada major convive con los demás (p. ej. 21 para HYNILLA).
+pub async fn install_java(client: &Client, app: &AppHandle, major: u32) -> Result<()> {
+    let major = if major == 0 { DEFAULT_JAVA_MAJOR } else { major };
     let _ = app.emit(
         "progress",
         serde_json::json!({
             "stage": "downloading_java",
-            "label": "Descargando Java 17 (Temurin)...",
+            "label": format!("Descargando Java {major} (Temurin)..."),
             "percent": 5.0,
         }),
     );
 
-    let java_root = paths::java_dir();
+    let java_root = paths::java_dir().join(major.to_string());
     std::fs::create_dir_all(&java_root)?;
-    let zip_path = paths::cache_dir().join("temurin-17-jre.zip");
+    let zip_path = paths::cache_dir().join(format!("temurin-{major}-jre.zip"));
     if let Some(parent) = zip_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
     // Follow Adoptium redirect to the actual package
     let response = client
-        .get(ADOPTIUM_JRE17_URL)
+        .get(adoptium_jre_url(major))
         .header("User-Agent", "HyLauncher")
         .send()
         .await?
@@ -81,7 +104,7 @@ pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
         "progress",
         serde_json::json!({
             "stage": "downloading_java",
-            "label": "Descargando Java 17...",
+            "label": format!("Descargando Java {major}..."),
             "percent": 35.0,
         }),
     );
@@ -93,12 +116,12 @@ pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
         "progress",
         serde_json::json!({
             "stage": "downloading_java",
-            "label": "Extrayendo Java 17...",
+            "label": format!("Extrayendo Java {major}..."),
             "percent": 70.0,
         }),
     );
 
-    // Clean previous managed runtime (keep folder)
+    // Clean previous managed runtime of this major (keep folder)
     if java_root.exists() {
         for entry in std::fs::read_dir(&java_root)?.flatten() {
             let p = entry.path();
@@ -113,15 +136,15 @@ pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
     extract_zip(&zip_path, &java_root)?;
 
     let javaw = find_managed_javaw().ok_or_else(|| {
-        LauncherError::Install(
-            "Java 17 se descargó pero no se encontró javaw.exe".to_string(),
-        )
+        LauncherError::Install(format!(
+            "Java {major} se descargó pero no se encontró javaw.exe"
+        ))
     })?;
 
-    let major = java_major_version(&javaw).unwrap_or(0);
-    if !is_compatible_major(major) {
+    let installed = java_major_version(&javaw).unwrap_or(0);
+    if !is_compatible_major(installed) {
         return Err(LauncherError::Install(format!(
-            "Java instalado reporta versión {major}, se necesita 17–21"
+            "Java instalado reporta versión {installed}, se necesita 17–21"
         )));
     }
 
@@ -129,7 +152,7 @@ pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
         "progress",
         serde_json::json!({
             "stage": "downloading_java",
-            "label": format!("Java {major} listo"),
+            "label": format!("Java {installed} listo"),
             "percent": 100.0,
         }),
     );
@@ -141,6 +164,56 @@ pub async fn install_java(client: &Client, app: &AppHandle) -> Result<()> {
 
 fn is_compatible_major(major: u32) -> bool {
     (17..=21).contains(&major)
+}
+
+/// Resuelve Java exigiendo un major concreto (p. ej. 21 para MC 1.21).
+/// Respeta el override; si no hay un runtime de ese major, da error
+/// para que el llamador lo instale.
+pub fn resolve_java_for_major(major: u32, override_path: Option<&str>) -> Result<String> {
+    if let Some(path) = override_path.map(str::trim).filter(|s| !s.is_empty()) {
+        if Path::new(path).exists() {
+            return Ok(path.to_string());
+        }
+        return Err(LauncherError::Install(format!(
+            "Java override no existe: {path}"
+        )));
+    }
+
+    // 1. Runtime gestionado de ese major (`java/<major>/`).
+    let managed_dir = paths::java_dir().join(major.to_string());
+    if managed_dir.exists() {
+        if let Some(javaw) = WalkDir::new(&managed_dir)
+            .max_depth(4)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path().to_path_buf())
+            .find(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.eq_ignore_ascii_case("javaw.exe"))
+            })
+        {
+            if java_major_version(&javaw).is_some_and(|v| v == major) {
+                return Ok(javaw.display().to_string());
+            }
+        }
+    }
+
+    // 2. Cualquier runtime (gestionado legacy o sistema) de ese major.
+    if let Some(managed) = find_managed_javaw() {
+        if java_major_version(&managed).is_some_and(|v| v == major) {
+            return Ok(managed.display().to_string());
+        }
+    }
+    for candidate in discover_java_candidates() {
+        if java_major_version(&candidate).is_some_and(|v| v == major) {
+            return Ok(candidate.display().to_string());
+        }
+    }
+
+    Err(LauncherError::Install(format!(
+        "No se encontró Java {major}. HyLauncher lo descargará automáticamente."
+    )))
 }
 
 fn find_managed_javaw() -> Option<PathBuf> {

@@ -124,9 +124,13 @@ fn empty_diff(is_full_install: bool, kind: UpdateKind) -> UpdateDiff {
 ///
 /// Fast path: if local content fingerprint matches remote, skip hashing every jar —
 /// only refresh local-manifest when pack metadata (e.g. packVersion) changed.
-pub async fn compute_diff(remote: &PackManifest, local: Option<&PackManifest>) -> UpdateDiff {
-    let mods_dir = paths::mods_dir();
-    let instance = paths::instance_dir();
+pub async fn compute_diff(
+    remote: &PackManifest,
+    local: Option<&PackManifest>,
+    pack: &paths::PackPaths,
+) -> UpdateDiff {
+    let mods_dir = pack.mods_dir();
+    let instance = pack.instance_dir().clone();
     let is_full_install = local.is_none();
 
     // ---- Fast path: solo metadata del pack ----
@@ -221,7 +225,7 @@ pub async fn compute_diff(remote: &PackManifest, local: Option<&PackManifest>) -
     }
 
     // ---- Resource Packs ----
-    let rp_dir = paths::resourcepacks_dir();
+    let rp_dir = pack.resourcepacks_dir();
     let local_rps: HashMap<&str, &ResourcePackEntry> = local
         .map(|m| {
             m.resource_packs
@@ -258,7 +262,7 @@ pub async fn compute_diff(remote: &PackManifest, local: Option<&PackManifest>) -
     }
 
     // ---- Shader Packs ----
-    let sp_dir = paths::shaderpacks_dir();
+    let sp_dir = pack.shaderpacks_dir();
     let local_sps: HashMap<&str, &ShaderPackEntry> = local
         .map(|m| {
             m.shader_packs
@@ -331,12 +335,12 @@ impl UpdateDiff {
 }
 
 /// Force re-download of every client/both-side mod from the manifest.
-pub fn force_reinstall_mods_diff(manifest: &PackManifest) -> UpdateDiff {
+pub fn force_reinstall_mods_diff(manifest: &PackManifest, pack: &paths::PackPaths) -> UpdateDiff {
     let mut mods_to_download = Vec::new();
     let mut total_download_size: u64 = 0;
     let mut mods_to_delete = Vec::new();
 
-    let mods_dir = paths::mods_dir();
+    let mods_dir = pack.mods_dir();
     for remote_mod in &manifest.mods {
         if remote_mod.side == "server" {
             continue;

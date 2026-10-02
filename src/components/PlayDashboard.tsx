@@ -4,11 +4,11 @@
 
 import {
   FaCheckCircle,
-  FaCog,
   FaCube,
   FaExclamationTriangle,
   FaGamepad,
-  FaServer,
+  FaLayerGroup,
+  FaMagic,
 } from "react-icons/fa";
 import { PlayButton } from "./PlayButton";
 import { GameRunningPanel } from "./GameRunningPanel";
@@ -20,6 +20,8 @@ interface PlayDashboardProps {
   manifest: PackManifest | null;
   modsCount: number;
   missingMods: number;
+  /** Mods + configs + texturas + shaders incluidos pendientes (todo el pack) */
+  pendingContent: number;
   launcherState: LauncherState;
   username: string;
   showProgress: boolean;
@@ -31,14 +33,20 @@ interface PlayDashboardProps {
   onPlay: () => void;
   onStopGame: () => void;
   onLeaveGameConsole: () => void;
-  onOpenSettings: () => void;
   onOpenMods: () => void;
+  onOpenTextures: () => void;
+  onOpenShaders: () => void;
+  texturesTotal: number;
+  texturesMissing: number;
+  shadersTotal: number;
+  shadersMissing: number;
 }
 
 export function PlayDashboard({
   manifest,
   modsCount,
   missingMods,
+  pendingContent,
   launcherState,
   username,
   showProgress,
@@ -50,23 +58,29 @@ export function PlayDashboard({
   onPlay,
   onStopGame,
   onLeaveGameConsole,
-  onOpenSettings,
   onOpenMods,
+  onOpenTextures,
+  onOpenShaders,
+  texturesTotal,
+  texturesMissing,
+  shadersTotal,
+  shadersMissing,
 }: PlayDashboardProps) {
   const { t } = useI18n();
-  const mc = manifest?.minecraft ?? "1.20.1";
+  const mc = manifest?.minecraft ?? "1.21.11";
   const fabric = manifest?.fabricLoader ?? "";
-  const serverName = manifest?.server.name ?? "Minecraft";
   const serverAddress = manifest?.server.address ?? "localhost";
   const serverPort = manifest?.server.port ?? 25565;
-  const packName = manifest?.packName ?? "HyPack";
+  const packName = manifest?.packName ?? "HYNILLA";
   const packVersion = manifest?.packVersion ?? "1.0";
   const packDesc =
     manifest?.packDescription ??
     "Modpack con rendimiento, visuales y calidad de vida.";
-  const autoConnect = manifest?.server.autoConnect ?? false;
   const installedMods = Math.max(0, modsCount - missingMods);
-  const syncOk = missingMods === 0;
+  const installedTextures = Math.max(0, texturesTotal - texturesMissing);
+  const installedShaders = Math.max(0, shadersTotal - shadersMissing);
+  const javaMajor = manifest?.java?.version ?? 17;
+  const syncOk = pendingContent === 0;
 
   if (launcherState === "running" || launcherState === "game_closed") {
     return (
@@ -111,7 +125,7 @@ export function PlayDashboard({
               ) : (
                 <>
                   <FaExclamationTriangle size={11} />{" "}
-                  {t("play.pending", { count: missingMods })}
+                  {t("play.pending", { count: pendingContent })}
                 </>
               )}
             </span>
@@ -139,44 +153,14 @@ export function PlayDashboard({
             subtitle={
               !hasAccount
                 ? t("play.loginToPlay")
-                : missingMods > 0
+                : pendingContent > 0
                   ? t("play.installModsFirst")
                   : `${serverAddress}:${serverPort}`
             }
           />
         </div>
 
-        <button
-          type="button"
-          className="hy-hero-settings"
-          onClick={onOpenSettings}
-          title={t("nav.settings")}
-        >
-          <FaCog size={16} />
-        </button>
       </section>
-
-      <div className="hy-server-bar">
-        <div className="hy-server-mark">
-          <div className="hy-server-icon">
-            <FaServer size={16} />
-          </div>
-          <div>
-            <span className="hy-server-name">{serverName}</span>
-            <span className="hy-server-addr">
-              {serverAddress}:{serverPort}
-              {autoConnect ? t("play.autoConnect") : ""}
-            </span>
-          </div>
-        </div>
-        {missingMods > 0 ? (
-          <button type="button" className="btn btn--primary btn--sm" onClick={onOpenMods}>
-            {t("play.goToMods")}
-          </button>
-        ) : (
-          <span className="hy-server-live">{t("play.ready")}</span>
-        )}
-      </div>
 
       <div className="hy-meta">
         <button type="button" className="hy-meta-item" onClick={onOpenMods}>
@@ -194,6 +178,36 @@ export function PlayDashboard({
           </span>
         </button>
 
+        <button type="button" className="hy-meta-item" onClick={onOpenTextures}>
+          <span className="hy-meta-icon">
+            <FaLayerGroup size={18} />
+          </span>
+          <span className="hy-meta-label">{t("nav.textures")}</span>
+          <span className="hy-meta-value">
+            {installedTextures}/{texturesTotal}
+          </span>
+          <span className="hy-meta-hint">
+            {texturesMissing > 0
+              ? t("play.toDownload", { count: texturesMissing })
+              : t("play.synced")}
+          </span>
+        </button>
+
+        <button type="button" className="hy-meta-item" onClick={onOpenShaders}>
+          <span className="hy-meta-icon">
+            <FaMagic size={18} />
+          </span>
+          <span className="hy-meta-label">{t("nav.shaders")}</span>
+          <span className="hy-meta-value">
+            {installedShaders}/{shadersTotal}
+          </span>
+          <span className="hy-meta-hint">
+            {shadersMissing > 0
+              ? t("play.toDownload", { count: shadersMissing })
+              : t("play.synced")}
+          </span>
+        </button>
+
         <div className="hy-meta-item">
           <span className="hy-meta-icon">
             <FaGamepad size={18} />
@@ -201,7 +215,7 @@ export function PlayDashboard({
           <span className="hy-meta-label">{t("play.client")}</span>
           <span className="hy-meta-value">{mc}</span>
           <span className="hy-meta-hint">
-            Fabric {fabric || "—"} · Java 17
+            Fabric {fabric || "—"} · Java {javaMajor}
           </span>
         </div>
 

@@ -13,10 +13,11 @@ use auth::{account_store::{AccountStore, StoredAccount, now_secs}, microsoft, of
 use discord::{resolve_client_id, DiscordRpc};
 
 use minecraft::{fabric, java_manager, launcher, version_manifest};
-use modpack::{diff, downloader, manifest::PackManifest, modrinth};
+use modpack::{diff, downloader, manifest::PackManifest, modrinth, packs};
 use utils::{error::LauncherError, http, paths};
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -27,47 +28,150 @@ pub struct AppState {
     pub account_store: Mutex<AccountStore>,
     pub game_child: Mutex<Option<std::process::Child>>,
     pub game_logs: Arc<Mutex<Vec<String>>>,
-    pub cached_manifest: Mutex<Option<PackManifest>>,
-    pub cached_diff: Mutex<Option<diff::UpdateDiff>>,
-    pub cached_version_json: Mutex<Option<version_manifest::VersionJson>>,
-    pub cached_fabric_profile: Mutex<Option<fabric::FabricProfile>>,
+    /// Índice de modpacks disponibles (se carga una vez por sesión).
+    pub cached_packs: Mutex<Option<Vec<packs::ModpackSummary>>>,
+    /// Manifests y diffs por pack id (cada pack tiene su instancia aislada).
+    pub cached_manifests: Mutex<HashMap<String, PackManifest>>,
+    pub cached_diffs: Mutex<HashMap<String, diff::UpdateDiff>>,
     pub discord_rpc: Mutex<DiscordRpc>,
 }
 
 // ---- Config Constants ----
-const MANIFEST_URL: &str =
-    "https://raw.githubusercontent.com/5duardo/HyLauncher/main/manifest.json";
-const MC_VERSION: &str = "1.20.1";
+/// Índice de modpacks disponibles (id, nombre, manifestUrl, ...).
+const PACKS_URL: &str =
+    "https://raw.githubusercontent.com/5duardo/HyLauncher/main/modpacks.json";
 
-fn resolve_bundled_manifest_path(app: &AppHandle) -> Option<std::path::PathBuf> {
-    // Installed app: resource dir next to the exe (NSIS copies resources here)
+/// Resuelve qué pack usar: el `pack_id` explícito o el activo persistido.
+/// Si el usuario aún no eligió ninguno → error (nada por default).
+fn resolve_pack_id(pack_id: Option<String>) -> Result<String, LauncherError> {
+    if let Some(id) = pack_id {
+        let id = id.trim().to_string();
+        if !id.is_empty() {
+            return Ok(id);
+        }
+    }
+    packs::load_active_pack_id().ok_or_else(|| {
+        LauncherError::Manifest(
+            "No hay ningún modpack seleccionado. Elige uno en la pestaña Modpacks.".to_string(),
+        )
+    })
+}
+
+fn pack_paths(pack_id: &str) -> paths::PackPaths {
+    let p = paths::PackPaths::new(pack_id);
+    let _ = p.ensure_dirs();
+    p
+}
+
+/// Carga el índice de modpacks (caché de sesión → remoto → bundled).
+async fn load_packs_index(
+    state: &State<'_, AppState>,
+    app: &AppHandle,
+) -> Result<Vec<packs::ModpackSummary>, LauncherError> {
+    if let Some(cached) = state.cached_packs.lock().unwrap().clone() {
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
+    }
+    let index = fetch_packs_index(&state.http_client, app).await;
+    *state.cached_packs.lock().unwrap() = Some(index.clone());
+    Ok(index)
+}
+
+async fn fetch_packs_index(
+    client: &reqwest::Client,
+    app: &AppHandle,
+) -> Vec<packs::ModpackSummary> {
+    // 1. Remoto
+    if let Ok(index) = http::download_json::<packs::PacksIndex>(client, PACKS_URL).await {
+        if !index.packs.is_empty() {
+            return index.packs;
+        }
+        log::warn!("Remote modpacks.json is empty — trying bundled fallback");
+    } else {
+        log::warn!("Remote modpacks.json fetch failed — trying bundled fallback");
+    }
+    // 2. Bundled modpacks.json
+    if let Some(path) = resolve_bundled_packs_path(app) {
+        if let Ok(data) = std::fs::read_to_string(&path) {
+            if let Ok(index) = serde_json::from_str::<packs::PacksIndex>(&data) {
+                if !index.packs.is_empty() {
+                    log::info!("Loaded modpacks index from {}", path.display());
+                    return index.packs;
+                }
+            }
+        }
+    }
+    // 3. Sin índice por ningún lado: lista vacía (la UI pide elegir pack).
+    log::warn!("No modpacks index available (remote + bundled failed)");
+    Vec::new()
+}
+
+fn resolve_bundled_packs_path(app: &AppHandle) -> Option<std::path::PathBuf> {
     if let Ok(dir) = app.path().resource_dir() {
-        let p = dir.join("manifest.json");
+        let p = dir.join("modpacks.json");
         if p.exists() {
             return Some(p);
         }
-        let p = dir.join("resources").join("manifest.json");
+        let p = dir.join("resources").join("modpacks.json");
         if p.exists() {
             return Some(p);
         }
     }
-
-    // Dev / cwd fallbacks
     for candidate in [
-        "resources/manifest.json",
-        "../resources/manifest.json",
-        "manifest.json",
-        "../manifest.json",
-        "manifest-example.json",
-        "../manifest-example.json",
+        "resources/modpacks.json",
+        "../resources/modpacks.json",
+        "modpacks.json",
+        "../modpacks.json",
     ] {
         let p = std::path::PathBuf::from(candidate);
         if p.exists() {
             return Some(p);
         }
     }
+    None
+}
 
-    let data = paths::launcher_data_dir().join("manifest.json");
+/// Bundled manifest de un pack: `manifest-<id>.json` (p. ej.
+/// `manifest-keo-vanilla.json`). Sirve como fallback cuando el remoto
+/// aún no está publicado (404) o no hay conexión.
+fn resolve_bundled_manifest_path(
+    app: &AppHandle,
+    pack_id: &str,
+) -> Option<std::path::PathBuf> {
+    let filename = format!(
+        "manifest-{}.json",
+        paths::sanitize_pack_id(pack_id)
+    );
+    // Installed app: resource dir next to the exe (NSIS copies resources here)
+    if let Ok(dir) = app.path().resource_dir() {
+        let p = dir.join(&filename);
+        if p.exists() {
+            return Some(p);
+        }
+        let p = dir.join("resources").join(&filename);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // Dev / cwd fallbacks
+    let candidates = [
+        format!("resources/{filename}"),
+        format!("../resources/{filename}"),
+        filename.clone(),
+        format!("../{filename}"),
+        "manifest-example.json".to_string(),
+        "../manifest-example.json".to_string(),
+    ];
+    for candidate in &candidates {
+        let p = std::path::PathBuf::from(candidate);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    let data = paths::launcher_data_dir().join(&filename);
     if data.exists() {
         return Some(data);
     }
@@ -274,6 +378,81 @@ fn set_active_account(state: State<'_, AppState>, account_id: String) -> Result<
     Ok(())
 }
 
+/// Verifica (y si hace falta renueva) la sesión premium de una cuenta.
+/// Las offline no necesitan verificación. Persiste los tokens renovados.
+async fn verify_account_session(
+    state: &State<'_, AppState>,
+    account: &StoredAccount,
+) -> Result<StoredAccount, LauncherError> {
+    if account.mode != "premium" {
+        return Ok(account.clone());
+    }
+    let Some(access) = account.access_token.clone() else {
+        return Err(LauncherError::Auth(
+            "La cuenta premium no tiene sesión guardada. Vuelve a iniciar sesión con Microsoft.".to_string(),
+        ));
+    };
+    let verified =
+        microsoft::verify_premium_session(&state.http_client, &access, account.refresh_token.clone())
+            .await?;
+    let mut updated = account.clone();
+    updated.username = verified.username;
+    updated.uuid = verified.uuid;
+    updated.access_token = Some(verified.access_token);
+    if verified.refresh_token.is_some() {
+        updated.refresh_token = verified.refresh_token;
+    }
+    updated.last_used = now_secs();
+    let mut store = state.account_store.lock().unwrap();
+    store.upsert(updated.clone());
+    store.save()?;
+    Ok(updated)
+}
+
+/// Re-verificación manual de sesión premium (botón en Ajustes + gate al jugar).
+#[tauri::command]
+async fn verify_premium_session(
+    state: State<'_, AppState>,
+    account_id: Option<String>,
+) -> Result<serde_json::Value, LauncherError> {
+    let account = {
+        let store = state.account_store.lock().unwrap();
+        match account_id
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+        {
+            Some(id) => store
+                .accounts
+                .iter()
+                .find(|a| a.id == id)
+                .cloned()
+                .ok_or_else(|| LauncherError::Auth("Cuenta no encontrada".to_string()))?,
+            None => store
+                .active()
+                .cloned()
+                .ok_or_else(|| LauncherError::Auth("No active account".to_string()))?,
+        }
+    };
+    if account.mode != "premium" {
+        return Ok(serde_json::json!({
+            "valid": true,
+            "mode": "offline",
+            "username": account.username,
+            "uuid": account.uuid,
+            "refreshed": false,
+        }));
+    }
+    let before = account.access_token.clone().unwrap_or_default();
+    let updated = verify_account_session(&state, &account).await?;
+    Ok(serde_json::json!({
+        "valid": true,
+        "mode": "premium",
+        "username": updated.username,
+        "uuid": updated.uuid,
+        "refreshed": updated.access_token.as_deref().unwrap_or("") != before,
+    }))
+}
+
 #[tauri::command]
 fn remove_account(state: State<'_, AppState>, account_id: String) -> Result<(), LauncherError> {
     let mut store = state.account_store.lock().unwrap();
@@ -283,53 +462,152 @@ fn remove_account(state: State<'_, AppState>, account_id: String) -> Result<(), 
 }
 
 // ============================================================
-// Tauri Commands — Modpack
+// Tauri Commands — Modpacks (registry + per-pack manifests)
 // ============================================================
+
+/// Lista de modpacks disponibles (índice remoto + fallbacks).
+#[tauri::command]
+async fn get_modpacks(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Vec<packs::ModpackSummary>, LauncherError> {
+    load_packs_index(&state, &app).await
+}
+
+/// El modpack elegido por el usuario (None si aún no eligió ninguno).
+#[tauri::command]
+async fn get_active_pack(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Option<packs::ModpackSummary>, LauncherError> {
+    let index = load_packs_index(&state, &app).await?;
+    let Some(id) = packs::load_active_pack_id() else {
+        return Ok(None);
+    };
+    Ok(packs::find_pack(&index, &id).cloned())
+}
+
+/// El usuario elige un modpack: se persiste y se prepara su instancia.
+#[tauri::command]
+async fn set_active_pack(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    pack_id: String,
+) -> Result<packs::ModpackSummary, LauncherError> {
+    let index = load_packs_index(&state, &app).await?;
+    let id = pack_id.trim();
+    let pack = packs::find_pack(&index, id)
+        .cloned()
+        .ok_or_else(|| {
+            LauncherError::Manifest(format!("Modpack desconocido: {id}"))
+        })?;
+    packs::save_active_pack_id(&pack.id)
+        .map_err(|e| LauncherError::Manifest(format!("No se pudo guardar la selección: {e}")))?;
+    // Prepara la instancia aislada del pack.
+    let _ = pack_paths(&pack.id);
+    log::info!("Active modpack set to {}", pack.id);
+    Ok(pack)
+}
+
+/// Descarga el manifest remoto de un pack (con fallbacks bundled/local).
+async fn fetch_remote_manifest(
+    client: &reqwest::Client,
+    app: &AppHandle,
+    pack: &packs::ModpackSummary,
+    local_path: &std::path::Path,
+) -> Result<PackManifest, LauncherError> {
+    log::info!(
+        "Checking for updates for pack {} from {}",
+        pack.id, pack.manifest_url
+    );
+    match http::download_json::<PackManifest>(client, &pack.manifest_url).await {
+        Ok(manifest) if !manifest.mods.is_empty() => Ok(manifest),
+        Ok(empty) => {
+            log::warn!(
+                "Remote manifest for {} has {} mods — trying bundled/local fallback",
+                pack.id,
+                empty.mods.len()
+            );
+            if let Some(path) = resolve_bundled_manifest_path(app, &pack.id) {
+                log::info!("Loading bundled manifest from {}", path.display());
+                return read_manifest_file(&path);
+            }
+            if local_path.exists() {
+                read_manifest_file(local_path)
+            } else if empty.mods.is_empty() {
+                Err(LauncherError::Manifest(
+                    "El manifest remoto está vacío y no hay copia local".to_string(),
+                ))
+            } else {
+                Ok(empty)
+            }
+        }
+        Err(e) => {
+            log::warn!("Remote manifest fetch failed for {}: {e} — trying fallback", pack.id);
+            if let Some(path) = resolve_bundled_manifest_path(app, &pack.id) {
+                log::info!("Loading bundled manifest from {}", path.display());
+                return read_manifest_file(&path);
+            }
+            if local_path.exists() {
+                read_manifest_file(local_path)
+            } else {
+                Err(LauncherError::Manifest(format!(
+                    "No se pudo descargar el manifest de {} y no hay copia local. Si acabas de agregarlo, súbelo a GitHub o incluye resources/manifest-{}.json en el build. Detalle: {e}",
+                    pack.id, pack.id
+                )))
+            }
+        }
+    }
+}
+
+/// Devuelve el manifest de un pack usando caché → local → remoto/bundled.
+/// Evita el "No manifest loaded" en la primera instalación: `fullSetup`
+/// llama a `install_minecraft` antes del primer `check_for_updates`, cuando
+/// la caché aún está vacía (normal en un pack recién elegido como HYNILLA).
+async fn ensure_manifest_cached(
+    state: &State<'_, AppState>,
+    app: &AppHandle,
+    pack_id: &str,
+) -> Result<PackManifest, LauncherError> {
+    if let Some(m) = state.cached_manifests.lock().unwrap().get(pack_id).cloned() {
+        return Ok(m);
+    }
+    let dirs = pack_paths(pack_id);
+    let local_path = dirs.local_manifest_file();
+    if local_path.exists() {
+        if let Ok(m) = read_manifest_file(&local_path) {
+            state.cached_manifests.lock().unwrap().insert(pack_id.to_string(), m.clone());
+            return Ok(m);
+        }
+    }
+    let index = load_packs_index(state, app).await?;
+    let pack = packs::find_pack(&index, pack_id).cloned().ok_or_else(|| {
+        LauncherError::Manifest(format!("Modpack desconocido: {pack_id}"))
+    })?;
+    let manifest = fetch_remote_manifest(&state.http_client, app, &pack, &local_path).await?;
+    state.cached_manifests.lock().unwrap().insert(pack_id.to_string(), manifest.clone());
+    Ok(manifest)
+}
 
 #[tauri::command]
 async fn check_for_updates(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<Option<serde_json::Value>, LauncherError> {
-    log::info!("Checking for updates from {}", MANIFEST_URL);
+    let id = resolve_pack_id(pack_id)?;
+    let index = load_packs_index(&state, &app).await?;
+    let pack = packs::find_pack(&index, &id).cloned().ok_or_else(|| {
+        LauncherError::Manifest(format!("Modpack desconocido: {id}"))
+    })?;
+    let dirs = pack_paths(&id);
+    let local_path = dirs.local_manifest_file();
 
     // Prefer remote pack list; fall back to bundled / local manifest (never invent an empty pack).
-    let remote: PackManifest = match http::download_json::<PackManifest>(&state.http_client, MANIFEST_URL).await {
-        Ok(manifest) if !manifest.mods.is_empty() => manifest,
-        Ok(empty) => {
-            log::warn!(
-                "Remote manifest has {} mods — trying bundled/local fallback",
-                empty.mods.len()
-            );
-            if let Some(path) = resolve_bundled_manifest_path(&app) {
-                log::info!("Loading bundled manifest from {}", path.display());
-                read_manifest_file(&path)?
-            } else if empty.mods.is_empty() {
-                return Err(LauncherError::Manifest(
-                    "El manifest remoto está vacío y no hay copia local".to_string(),
-                ));
-            } else {
-                empty
-            }
-        }
-        Err(e) => {
-            log::warn!("Remote manifest fetch failed: {e} — trying bundled/local fallback");
-            if let Some(path) = resolve_bundled_manifest_path(&app) {
-                log::info!("Loading bundled manifest from {}", path.display());
-                read_manifest_file(&path)?
-            } else {
-                let local_path = paths::local_manifest_file();
-                if local_path.exists() {
-                    read_manifest_file(&local_path)?
-                } else {
-                    return Err(e);
-                }
-            }
-        }
-    };
+    let remote: PackManifest =
+        fetch_remote_manifest(&state.http_client, &app, &pack, &local_path).await?;
 
     // Load local manifest
-    let local_path = paths::local_manifest_file();
     let local: Option<PackManifest> = if local_path.exists() {
         read_manifest_file(&local_path).ok()
     } else {
@@ -337,7 +615,7 @@ async fn check_for_updates(
     };
 
     // Compute diff (fast-path skips hashing when only pack metadata changed)
-    let update_diff = diff::compute_diff(&remote, local.as_ref()).await;
+    let update_diff = diff::compute_diff(&remote, local.as_ref(), &dirs).await;
 
     if update_diff.is_empty() {
         // Nada que descargar: refrescar local-manifest (incluye updates solo de packVersion)
@@ -348,13 +626,14 @@ async fn check_for_updates(
         std::fs::write(&local_path, json)?;
 
         log::info!(
-            "Update check done: kind={:?}, pack v{}",
+            "Update check done: kind={:?}, pack {} v{}",
             update_diff.update_kind,
+            id,
             remote.pack_version
         );
 
-        *state.cached_manifest.lock().unwrap() = Some(remote);
-        *state.cached_diff.lock().unwrap() = None;
+        state.cached_manifests.lock().unwrap().insert(id.clone(), remote);
+        state.cached_diffs.lock().unwrap().remove(&id);
         return Ok(None);
     }
 
@@ -388,8 +667,8 @@ async fn check_for_updates(
         update_diff.total_download_size
     );
 
-    *state.cached_manifest.lock().unwrap() = Some(remote);
-    *state.cached_diff.lock().unwrap() = Some(update_diff);
+    state.cached_manifests.lock().unwrap().insert(id.clone(), remote);
+    state.cached_diffs.lock().unwrap().insert(id, update_diff);
 
     Ok(Some(result))
 }
@@ -398,30 +677,35 @@ async fn check_for_updates(
 async fn execute_update(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<(), LauncherError> {
+    let id = resolve_pack_id(pack_id)?;
+    let dirs = pack_paths(&id);
     let manifest = state
-        .cached_manifest
+        .cached_manifests
         .lock()
         .unwrap()
-        .clone()
+        .get(&id)
+        .cloned()
         .ok_or_else(|| LauncherError::Manifest("No manifest cached".to_string()))?;
 
     let update_diff = state
-        .cached_diff
+        .cached_diffs
         .lock()
         .unwrap()
-        .clone()
+        .get(&id)
+        .cloned()
         .ok_or_else(|| LauncherError::Manifest("No diff cached".to_string()))?;
 
     // Execute downloads
-    downloader::execute_diff(&state.http_client, &update_diff, &manifest, &app).await?;
+    downloader::execute_diff(&state.http_client, &update_diff, &manifest, &app, &dirs).await?;
 
     // Save manifest as local
-    let local_path = paths::local_manifest_file();
+    let local_path = dirs.local_manifest_file();
     let json = serde_json::to_string_pretty(&manifest)?;
     std::fs::write(&local_path, json)?;
 
-    *state.cached_diff.lock().unwrap() = None;
+    state.cached_diffs.lock().unwrap().remove(&id);
 
     Ok(())
 }
@@ -431,11 +715,18 @@ async fn execute_update(
 async fn reinstall_mods(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<serde_json::Value, LauncherError> {
+    let id = resolve_pack_id(pack_id)?;
+    let index = load_packs_index(&state, &app).await?;
+    let pack = packs::find_pack(&index, &id).cloned().ok_or_else(|| {
+        LauncherError::Manifest(format!("Modpack desconocido: {id}"))
+    })?;
+    let dirs = pack_paths(&id);
     // Prefer cached remote/local pack list
-    let mut manifest = state.cached_manifest.lock().unwrap().clone();
+    let mut manifest = state.cached_manifests.lock().unwrap().get(&id).cloned();
     if manifest.is_none() {
-        let path = paths::local_manifest_file();
+        let path = dirs.local_manifest_file();
         if path.exists() {
             manifest = Some(read_manifest_file(&path)?);
         }
@@ -443,10 +734,8 @@ async fn reinstall_mods(
     // Last resort: bundled / remote
     let manifest = if let Some(m) = manifest {
         m
-    } else if let Some(path) = resolve_bundled_manifest_path(&app) {
-        read_manifest_file(&path)?
     } else {
-        http::download_json::<PackManifest>(&state.http_client, MANIFEST_URL).await?
+        fetch_remote_manifest(&state.http_client, &app, &pack, &dirs.local_manifest_file()).await?
     };
 
     if manifest.mods.is_empty() {
@@ -455,24 +744,24 @@ async fn reinstall_mods(
         ));
     }
 
-    let update_diff = diff::force_reinstall_mods_diff(&manifest);
+    let update_diff = diff::force_reinstall_mods_diff(&manifest, &dirs);
     let count = update_diff.mods_to_download.len();
     let total = update_diff.total_download_size;
 
-    log::info!("Force reinstalling {count} mods (~{total} bytes)");
+    log::info!("Force reinstalling {count} mods (~{total} bytes) for pack {id}");
 
-    *state.cached_manifest.lock().unwrap() = Some(manifest.clone());
-    *state.cached_diff.lock().unwrap() = Some(update_diff.clone());
+    state.cached_manifests.lock().unwrap().insert(id.clone(), manifest.clone());
+    state.cached_diffs.lock().unwrap().insert(id.clone(), update_diff.clone());
 
-    downloader::execute_diff(&state.http_client, &update_diff, &manifest, &app).await?;
+    downloader::execute_diff(&state.http_client, &update_diff, &manifest, &app, &dirs).await?;
 
-    let local_path = paths::local_manifest_file();
+    let local_path = dirs.local_manifest_file();
     if let Some(parent) = local_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     let json = serde_json::to_string_pretty(&manifest)?;
     std::fs::write(&local_path, json)?;
-    *state.cached_diff.lock().unwrap() = None;
+    state.cached_diffs.lock().unwrap().remove(&id);
 
     Ok(serde_json::json!({
         "reinstalled": count,
@@ -481,19 +770,30 @@ async fn reinstall_mods(
 }
 
 #[tauri::command]
-fn get_local_manifest(state: State<'_, AppState>) -> Result<Option<serde_json::Value>, LauncherError> {
+fn get_local_manifest(
+    state: State<'_, AppState>,
+    pack_id: Option<String>,
+) -> Result<Option<serde_json::Value>, LauncherError> {
+    // Sin pack elegido no hay manifest que mostrar (nada por default).
+    let Some(id) = pack_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(packs::load_active_pack_id)
+    else {
+        return Ok(None);
+    };
     // Try cache first
-    if let Some(ref manifest) = *state.cached_manifest.lock().unwrap() {
+    if let Some(manifest) = state.cached_manifests.lock().unwrap().get(&id) {
         return Ok(Some(serde_json::to_value(manifest).unwrap()));
     }
 
     // Try disk
-    let path = paths::local_manifest_file();
+    let path = pack_paths(&id).local_manifest_file();
     if path.exists() {
         let data = std::fs::read_to_string(&path)?;
         let manifest: PackManifest = serde_json::from_str(&data)?;
         let value = serde_json::to_value(&manifest).unwrap();
-        *state.cached_manifest.lock().unwrap() = Some(manifest);
+        state.cached_manifests.lock().unwrap().insert(id, manifest);
         return Ok(Some(value));
     }
 
@@ -513,21 +813,40 @@ async fn get_mod_icons(
 // ============================================================
 
 #[tauri::command]
-fn is_minecraft_installed(state: State<'_, AppState>) -> bool {
-    let vanilla_ok = version_manifest::is_installed(MC_VERSION);
+fn is_minecraft_installed(state: State<'_, AppState>, pack_id: Option<String>) -> bool {
+    let Ok(id) = resolve_pack_id(pack_id) else {
+        return false;
+    };
+    let dirs = pack_paths(&id);
+    let mc_version = state
+        .cached_manifests
+        .lock()
+        .unwrap()
+        .get(&id)
+        .map(|m| m.minecraft.clone())
+        .or_else(|| {
+            read_manifest_file(&dirs.local_manifest_file())
+                .ok()
+                .map(|m| m.minecraft)
+        });
+    let Some(mc_version) = mc_version else {
+        return false;
+    };
+    let vanilla_ok = version_manifest::is_installed(&mc_version, &dirs);
     if !vanilla_ok {
         return false;
     }
 
-    let manifest = state.cached_manifest.lock().unwrap();
-    match manifest.as_ref() {
+    let manifest = state.cached_manifests.lock().unwrap();
+    match manifest.get(&id) {
         Some(m) => {
-            let fabric_dir = paths::versions_dir()
-                .join(format!("fabric-loader-{}-{}", m.fabric_loader, MC_VERSION));
+            let fabric_dir = dirs
+                .versions_dir()
+                .join(format!("fabric-loader-{}-{}", m.fabric_loader, m.minecraft));
             fabric_dir.exists()
         }
         None => {
-            if let Ok(entries) = std::fs::read_dir(paths::versions_dir()) {
+            if let Ok(entries) = std::fs::read_dir(dirs.versions_dir()) {
                 for entry in entries.flatten() {
                     let name = entry.file_name();
                     let name_str = name.to_string_lossy();
@@ -545,35 +864,35 @@ fn is_minecraft_installed(state: State<'_, AppState>) -> bool {
 async fn install_minecraft(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<(), LauncherError> {
-    // Install vanilla Minecraft
-    let version_json =
-        version_manifest::install(&state.http_client, MC_VERSION, &app).await?;
+    let id = resolve_pack_id(pack_id)?;
+    let dirs = pack_paths(&id);
+    let manifest = ensure_manifest_cached(&state, &app, &id).await?;
+    let mc_version = manifest.minecraft.clone();
+
+    // Install vanilla Minecraft (dentro de la instancia del pack)
+    let _version_json =
+        version_manifest::install(&state.http_client, &mc_version, &app, &dirs).await?;
 
     // Get Fabric loader version from cached manifest or use latest
-    let cached_loader = state.cached_manifest.lock().unwrap().as_ref().map(|m| m.fabric_loader.clone());
-    let loader_version = match cached_loader {
-        Some(version) => version,
-        None => {
-            fabric::get_latest_loader_version(&state.http_client, MC_VERSION).await?
-        }
+    let loader_version = if manifest.fabric_loader.is_empty() {
+        fabric::get_latest_loader_version(&state.http_client, &mc_version).await?
+    } else {
+        manifest.fabric_loader.clone()
     };
 
     // Install Fabric
-    let fabric_profile =
-        fabric::install(&state.http_client, MC_VERSION, &loader_version, &app).await?;
+    let _fabric_profile =
+        fabric::install(&state.http_client, &mc_version, &loader_version, &app, &dirs).await?;
 
     // Generate servers.dat
-    if let Some(ref manifest) = *state.cached_manifest.lock().unwrap() {
-        let _ = launcher::generate_servers_dat(
-            &manifest.server.name,
-            &manifest.server.address,
-            manifest.server.port,
-        );
-    }
-
-    *state.cached_version_json.lock().unwrap() = Some(version_json);
-    *state.cached_fabric_profile.lock().unwrap() = Some(fabric_profile);
+    let _ = launcher::generate_servers_dat(
+        dirs.instance_dir(),
+        &manifest.server.name,
+        &manifest.server.address,
+        manifest.server.port,
+    );
 
     Ok(())
 }
@@ -582,8 +901,11 @@ async fn install_minecraft(
 async fn launch_game(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<(), LauncherError> {
-    // Get account
+    let id = resolve_pack_id(pack_id)?;
+    let dirs = pack_paths(&id);
+    // Get account (las premium se verifican + renuevan antes de lanzar).
     let account = {
         let store = state.account_store.lock().unwrap();
         store
@@ -591,37 +913,41 @@ async fn launch_game(
             .cloned()
             .ok_or_else(|| LauncherError::Auth("No active account".to_string()))?
     };
+    let account = verify_account_session(&state, &account).await?;
 
-    // Get manifest
-    let manifest = state
-        .cached_manifest
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| LauncherError::Manifest("No manifest loaded".to_string()))?;
+    // Get manifest (caché → local → remoto/bundled, nunca "No manifest loaded")
+    let manifest = ensure_manifest_cached(&state, &app, &id).await?;
+
+    // Aplica todas las texturas del pack al entrar al juego (no bloquea el launch si falla).
+    let _ = downloader::update_options_txt_packs(&manifest, &dirs);
 
     // Get settings
     let settings = load_settings();
 
     // We need the version JSON and fabric profile
-    // If not cached, reload them from disk
-    let version_json = ensure_version_json(&state).await?;
-    let fabric_profile = ensure_fabric_profile(&state).await?;
+    let version_json = ensure_version_json(&state, &manifest.minecraft).await?;
+    let fabric_profile = ensure_fabric_profile(&state, &manifest).await?;
 
-    // Prefer managed/system Java 17–21; never silently use Java 25+
-    let java_path = match java_manager::resolve_java_executable(
+    // Java del major que pida el pack (21 para HYNILLA); never Java 25+
+    let major = required_java_major(&state, &id);
+    let java_path = match java_manager::resolve_java_for_major(
+        major,
         settings.java_path_override.as_deref(),
     ) {
         Ok(path) => Some(path),
         Err(_) => {
-            // Auto-install Temurin 17, then resolve again
-            java_manager::install_java(&state.http_client, &app).await?;
-            Some(java_manager::resolve_java_executable(None)?)
+            // Auto-install Temurin del major que pida el pack, then resolve again
+            java_manager::install_java(&state.http_client, &app, major).await?;
+            Some(java_manager::resolve_java_for_major(
+                major,
+                settings.java_path_override.as_deref(),
+            )?)
         }
     };
 
     let config = launcher::LaunchConfig {
-        mc_version: MC_VERSION.to_string(),
+        mc_version: manifest.minecraft.clone(),
+        asset_index: version_json.asset_index.id.clone(),
         fabric_version: manifest.fabric_loader.clone(),
         ram_mb: settings.ram_mb,
         server_address: if manifest.server.auto_connect {
@@ -636,9 +962,12 @@ async fn launch_game(
         },
         account,
         fabric_main_class: fabric_profile.main_class.clone(),
-        vanilla_classpath: version_manifest::get_vanilla_classpath(&version_json),
-        fabric_classpath: fabric::get_fabric_classpath(&fabric_profile),
+        vanilla_classpath: version_manifest::get_vanilla_classpath(&version_json, &dirs),
+        fabric_classpath: fabric::get_fabric_classpath(&fabric_profile, &dirs),
         java_path,
+        game_dir: dirs.instance_dir().clone(),
+        assets_dir: dirs.assets_dir(),
+        natives_dir: dirs.natives_dir(),
     };
 
     let java_used = config.java_path.clone().unwrap_or_else(|| "javaw".into());
@@ -657,8 +986,8 @@ async fn launch_game(
             &mut logs,
             &app,
             format!(
-                "[HyLauncher] Iniciando Fabric {} / MC {}",
-                manifest.fabric_loader, MC_VERSION
+                "[HyLauncher] Iniciando Fabric {} / MC {} (pack {})",
+                manifest.fabric_loader, manifest.minecraft, id
             ),
         );
         push_game_log_locked(
@@ -668,7 +997,12 @@ async fn launch_game(
         );
     }
 
-    attach_game_output_pipes(app.clone(), Arc::clone(&state.game_logs), &mut child);
+    attach_game_output_pipes(
+        app.clone(),
+        Arc::clone(&state.game_logs),
+        &mut child,
+        dirs.instance_dir().join("logs").join("latest.log"),
+    );
 
     *state.game_child.lock().unwrap() = Some(child);
 
@@ -694,7 +1028,12 @@ fn push_game_log_locked(logs: &mut Vec<String>, app: &AppHandle, line: String) {
     let _ = app.emit("game_log", serde_json::json!({ "line": line }));
 }
 
-fn attach_game_output_pipes(app: AppHandle, logs: Arc<Mutex<Vec<String>>>, child: &mut std::process::Child) {
+fn attach_game_output_pipes(
+    app: AppHandle,
+    logs: Arc<Mutex<Vec<String>>>,
+    child: &mut std::process::Child,
+    log_path: std::path::PathBuf,
+) {
     use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
     let stdout = child.stdout.take();
@@ -719,7 +1058,6 @@ fn attach_game_output_pipes(app: AppHandle, logs: Arc<Mutex<Vec<String>>>, child
     }
 
     // Tail Fabric's latest.log (most useful for crashes)
-    let log_path = paths::instance_dir().join("logs").join("latest.log");
     let app_tail = app;
     let logs_tail = logs;
     std::thread::spawn(move || {
@@ -823,12 +1161,42 @@ fn is_java_available() -> bool {
     java_manager::is_java_available()
 }
 
+/// Major de Java que exige un pack (manifest `java.version` o por MC).
+fn required_java_major(state: &State<'_, AppState>, pack_id: &str) -> u32 {
+    if let Some(m) = state.cached_manifests.lock().unwrap().get(pack_id) {
+        if let Some(java) = m.java.as_ref() {
+            if java.version >= 17 {
+                return java.version;
+            }
+        }
+        return java_manager::required_java_major_for_mc(&m.minecraft);
+    }
+    if let Ok(manifest) = read_manifest_file(&pack_paths(pack_id).local_manifest_file()) {
+        if let Some(java) = manifest.java.as_ref() {
+            if java.version >= 17 {
+                return java.version;
+            }
+        }
+        return java_manager::required_java_major_for_mc(&manifest.minecraft);
+    }
+    17
+}
+
 #[tauri::command]
 async fn install_java(
     state: State<'_, AppState>,
     app: AppHandle,
+    pack_id: Option<String>,
 ) -> Result<(), LauncherError> {
-    java_manager::install_java(&state.http_client, &app).await
+    let major = match pack_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(packs::load_active_pack_id)
+    {
+        Some(id) => required_java_major(&state, &id),
+        None => 17,
+    };
+    java_manager::install_java(&state.http_client, &app, major).await
 }
 
 // ============================================================
@@ -918,9 +1286,12 @@ fn clear_launcher_logs() -> Result<u64, String> {
 }
 
 #[tauri::command]
-fn open_storage_folder(which: String) -> Result<(), String> {
+fn open_storage_folder(which: String, pack_id: Option<String>) -> Result<(), String> {
     let path = match which.as_str() {
-        "instance" => paths::instance_dir(),
+        "instance" => match pack_id.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).or_else(packs::load_active_pack_id) {
+            Some(id) => pack_paths(&id).instance_dir().clone(),
+            None => paths::instances_root(),
+        },
         "cache" => paths::cache_dir(),
         "java" => paths::java_dir(),
         "data" => paths::launcher_data_dir(),
@@ -1138,9 +1509,8 @@ fn load_settings() -> LauncherSettings {
 
 async fn ensure_version_json(
     state: &State<'_, AppState>,
+    mc_version: &str,
 ) -> Result<version_manifest::VersionJson, LauncherError> {
-    let _vj_exists = state.cached_version_json.lock().unwrap().is_some();
-
     // Reload from Mojang
     let client = &state.http_client;
     let manifest: version_manifest::VersionManifest =
@@ -1148,7 +1518,7 @@ async fn ensure_version_json(
     let entry = manifest
         .versions
         .iter()
-        .find(|v| v.id == MC_VERSION)
+        .find(|v| v.id == mc_version)
         .ok_or_else(|| LauncherError::Install("MC version not found".to_string()))?;
     let version_json: version_manifest::VersionJson =
         http::download_json(client, &entry.url).await?;
@@ -1157,18 +1527,17 @@ async fn ensure_version_json(
 
 async fn ensure_fabric_profile(
     state: &State<'_, AppState>,
+    manifest: &PackManifest,
 ) -> Result<fabric::FabricProfile, LauncherError> {
-    let loader_version = {
-        let manifest = state.cached_manifest.lock().unwrap();
-        manifest
-            .as_ref()
-            .map(|m| m.fabric_loader.clone())
-            .unwrap_or_else(|| "0.16.14".to_string())
+    let loader_version = if manifest.fabric_loader.is_empty() {
+        "0.16.14".to_string()
+    } else {
+        manifest.fabric_loader.clone()
     };
 
     let url = format!(
         "https://meta.fabricmc.net/v2/versions/loader/{}/{}/profile/json",
-        MC_VERSION, loader_version
+        manifest.minecraft, loader_version
     );
     let profile: fabric::FabricProfile =
         http::download_json(&state.http_client, &url).await?;
@@ -1179,13 +1548,26 @@ async fn ensure_fabric_profile(
 // Tauri Commands — Shaders and Resource Packs
 // ============================================================
 
+fn optional_dir(
+    folder_type: &str,
+    pack_id: Option<String>,
+) -> Result<std::path::PathBuf, LauncherError> {
+    let id = resolve_pack_id(pack_id)?;
+    let dirs = pack_paths(&id);
+    match folder_type {
+        "resourcepack" => Ok(dirs.resourcepacks_dir()),
+        "shaderpack" => Ok(dirs.shaderpacks_dir()),
+        _ => Err(LauncherError::Other("Invalid folder type".to_string())),
+    }
+}
+
 #[tauri::command]
-async fn check_optional_file(folder_type: String, filename: String) -> Result<bool, LauncherError> {
-    let dir = match folder_type.as_str() {
-        "resourcepack" => paths::resourcepacks_dir(),
-        "shaderpack" => paths::shaderpacks_dir(),
-        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
-    };
+async fn check_optional_file(
+    folder_type: String,
+    filename: String,
+    pack_id: Option<String>,
+) -> Result<bool, LauncherError> {
+    let dir = optional_dir(&folder_type, pack_id)?;
     Ok(dir.join(filename).exists())
 }
 
@@ -1197,12 +1579,9 @@ async fn download_optional_file(
     folder_type: String,
     filename: String,
     sha1: String,
+    pack_id: Option<String>,
 ) -> Result<(), LauncherError> {
-    let dir = match folder_type.as_str() {
-        "resourcepack" => paths::resourcepacks_dir(),
-        "shaderpack" => paths::shaderpacks_dir(),
-        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
-    };
+    let dir = optional_dir(&folder_type, pack_id)?;
     std::fs::create_dir_all(&dir)?;
     let dest = dir.join(&filename);
 
@@ -1239,12 +1618,12 @@ async fn download_optional_file(
 }
 
 #[tauri::command]
-async fn delete_optional_file(folder_type: String, filename: String) -> Result<(), LauncherError> {
-    let dir = match folder_type.as_str() {
-        "resourcepack" => paths::resourcepacks_dir(),
-        "shaderpack" => paths::shaderpacks_dir(),
-        _ => return Err(LauncherError::Other("Invalid folder type".to_string())),
-    };
+async fn delete_optional_file(
+    folder_type: String,
+    filename: String,
+    pack_id: Option<String>,
+) -> Result<(), LauncherError> {
+    let dir = optional_dir(&folder_type, pack_id)?;
     let path = dir.join(filename);
     if path.exists() {
         std::fs::remove_file(path)?;
@@ -1294,10 +1673,9 @@ pub fn run() {
             account_store: Mutex::new(account_store),
             game_child: Mutex::new(None),
             game_logs: Arc::new(Mutex::new(Vec::new())),
-            cached_manifest: Mutex::new(None),
-            cached_diff: Mutex::new(None),
-            cached_version_json: Mutex::new(None),
-            cached_fabric_profile: Mutex::new(None),
+            cached_packs: Mutex::new(None),
+            cached_manifests: Mutex::new(HashMap::new()),
+            cached_diffs: Mutex::new(HashMap::new()),
             discord_rpc: Mutex::new(DiscordRpc::new()),
         })
         .setup(|app| {
@@ -1351,12 +1729,16 @@ pub fn run() {
             start_microsoft_login,
             poll_microsoft_login,
             cancel_microsoft_login,
+            verify_premium_session,
             login_offline,
             get_accounts,
             get_active_account,
             set_active_account,
             remove_account,
             // Modpack
+            get_modpacks,
+            get_active_pack,
+            set_active_pack,
             check_for_updates,
             execute_update,
             reinstall_mods,

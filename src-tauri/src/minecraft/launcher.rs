@@ -3,7 +3,7 @@
 // ============================================================
 
 use crate::auth::account_store::StoredAccount;
-use crate::utils::{error::Result, paths};
+use crate::utils::error::Result;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -19,6 +19,12 @@ pub struct LaunchConfig {
     pub vanilla_classpath: Vec<PathBuf>,
     pub fabric_classpath: Vec<PathBuf>,
     pub java_path: Option<String>,
+    /// Isolated game directory of the active modpack (`instances/<packId>/`).
+    pub game_dir: PathBuf,
+    pub assets_dir: PathBuf,
+    pub natives_dir: PathBuf,
+    /// Mojang asset index id (per MC version, e.g. "5" for 1.20.1).
+    pub asset_index: String,
 }
 
 /// Prefer keeping `javaw.exe` (no extra console window). Stdout/stderr are piped
@@ -29,9 +35,9 @@ fn launch_java_path(path: &str) -> String {
 
 /// Build and launch the Minecraft process
 pub fn launch(config: &LaunchConfig) -> Result<std::process::Child> {
-    let instance = paths::instance_dir();
-    let assets = paths::assets_dir();
-    let natives = paths::natives_dir();
+    let instance = &config.game_dir;
+    let assets = &config.assets_dir;
+    let natives = &config.natives_dir;
 
     // Build full classpath
     let mut classpath_entries: Vec<String> = Vec::new();
@@ -72,7 +78,7 @@ pub fn launch(config: &LaunchConfig) -> Result<std::process::Child> {
         "--assetsDir".to_string(),
         assets.display().to_string(),
         "--assetIndex".to_string(),
-        "5".to_string(), // MC 1.20.1 uses asset index "5"
+        config.asset_index.clone(),
         "--uuid".to_string(),
         config.account.uuid.replace("-", ""),
         "--accessToken".to_string(),
@@ -162,8 +168,13 @@ pub fn launch(config: &LaunchConfig) -> Result<std::process::Child> {
 }
 
 /// Generate servers.dat NBT file for the server list (fallback for pre-1.20)
-pub fn generate_servers_dat(server_name: &str, server_address: &str, port: u16) -> Result<()> {
-    let servers_path = paths::instance_dir().join("servers.dat");
+pub fn generate_servers_dat(
+    instance_dir: &std::path::Path,
+    server_name: &str,
+    server_address: &str,
+    port: u16,
+) -> Result<()> {
+    let servers_path = instance_dir.join("servers.dat");
 
     // Use fastnbt to create the NBT structure
     // servers.dat format: compound { servers: list of compound { name, ip, icon? } }

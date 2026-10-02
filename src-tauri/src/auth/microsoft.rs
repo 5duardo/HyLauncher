@@ -390,6 +390,171 @@ pub async fn get_minecraft_profile(
     Ok(profile)
 }
 
+/// Renueva el access token de Microsoft con el refresh token guardado.
+/// Sin esto la sesión premium muere en ~24h y el juego no entra a servidores.
+pub async fn refresh_ms_token(
+    client: &Client,
+    refresh_token: &str,
+) -> Result<(String, Option<String>)> {
+    let client_id = client_id();
+    let url = format!(
+        "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+        TENANT
+    );
+    let response = client
+        .post(&url)
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("client_id", client_id.as_str()),
+            ("refresh_token", refresh_token),
+        ])
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        return Err(LauncherError::Auth(
+            "La sesión de Microsoft caducó y no se pudo renovar. Vuelve a iniciar sesión.".to_string(),
+        ));
+    }
+    let token_resp: TokenResponse = response.json().await?;
+    Ok((token_resp.access_token, token_resp.refresh_token))
+}
+
+#[derive(Debug, Deserialize)]
+struct McEntitlements {
+    items: Vec<McEntitlement>,
+}
+
+#[derive(Debug, Deserialize)]
+struct McEntitlement {
+    name: String,
+}
+
+enum SessionCheck {
+    /// Token válido y con Minecraft comprado.
+    Valid(McProfile),
+    /// Token muerto (401/403): se puede intentar renovar.
+    Expired,
+    /// La cuenta no tiene Minecraft Java.
+    NoGame,
+    /// Fallo de red/parseo: no concluyente.
+    Failed(String),
+}
+
+/// Una pasada de verificación: perfil + entitlements (prueba de propiedad).
+async fn check_session_once(client: &Client, mc_token: &str) -> SessionCheck {
+    let profile_resp = client
+        .get("https://api.minecraftservices.com/minecraft/profile")
+        .header("Authorization", format!("Bearer {}", mc_token))
+        .send()
+        .await;
+    let profile_resp = match profile_resp {
+        Ok(r) => r,
+        Err(e) => return SessionCheck::Failed(format!("Sin conexión con Mojang: {e}")),
+    };
+    match profile_resp.status().as_u16() {
+        401 | 403 => return SessionCheck::Expired,
+        404 => return SessionCheck::NoGame,
+        s if !profile_resp.status().is_success() => {
+            return SessionCheck::Failed(format!("Mojang respondió HTTP {s}"))
+        }
+        _ => {}
+    }
+    let profile: McProfile = match profile_resp.json().await {
+        Ok(p) => p,
+        Err(e) => return SessionCheck::Failed(format!("Perfil inválido: {e}")),
+    };
+    // Prueba extra de propiedad: el perfil 200 ya la implica, pero las
+    // entitlements lo confirman. Si este endpoint falla por red, no se
+    // bloquea (el perfil válido basta).
+    match client
+        .get("https://api.minecraftservices.com/entitlements/mcstore")
+        .header("Authorization", format!("Bearer {}", mc_token))
+        .send()
+        .await
+    {
+        Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => {
+            return SessionCheck::Expired
+        }
+        Ok(r) if r.status().is_success() => match r.json::<McEntitlements>().await {
+            Ok(ent) if ent.items.iter().any(|i| i.name == "game_minecraft") => {}
+            Ok(_) => return SessionCheck::NoGame,
+            Err(e) => log::warn!("Entitlements ilegibles, se acepta el perfil: {e}"),
+        },
+        Ok(_) => log::warn!("Entitlements no disponibles, se acepta el perfil"),
+        Err(e) => log::warn!("Sin conexión a entitlements, se acepta el perfil: {e}"),
+    }
+    SessionCheck::Valid(profile)
+}
+
+fn format_uuid(raw: &str) -> String {
+    if raw.contains('-') {
+        return raw.to_string();
+    }
+    format!(
+        "{}-{}-{}-{}-{}",
+        &raw[..8],
+        &raw[8..12],
+        &raw[12..16],
+        &raw[16..20],
+        &raw[20..]
+    )
+}
+
+/// Resultado de verificar (y si hizo falta, renovar) una sesión premium.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifiedSession {
+    pub username: String,
+    pub uuid: String,
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub refreshed: bool,
+}
+
+/// Verifica que la sesión premium siga válida: perfil + propiedad del juego.
+/// Si el token caducó y hay refresh token, lo renueva solo. Si la cuenta no
+/// tiene Minecraft comprado o la sesión murió, devuelve error explicativo.
+pub async fn verify_premium_session(
+    client: &Client,
+    access_token: &str,
+    refresh_token: Option<String>,
+) -> Result<VerifiedSession> {
+    let build = |profile: McProfile, access_token: String, refresh_token: Option<String>, refreshed: bool| {
+        VerifiedSession {
+            username: profile.name,
+            uuid: format_uuid(&profile.id),
+            access_token,
+            refresh_token,
+            refreshed,
+        }
+    };
+    match check_session_once(client, access_token).await {
+        SessionCheck::Valid(profile) => Ok(build(profile, access_token.to_string(), refresh_token, false)),
+        SessionCheck::NoGame => Err(LauncherError::Auth(
+            "Esta cuenta de Microsoft no tiene Minecraft Java comprado.".to_string(),
+        )),
+        SessionCheck::Failed(msg) => Err(LauncherError::Auth(msg)),
+        SessionCheck::Expired => {
+            let Some(rt) = refresh_token else {
+                return Err(LauncherError::Auth(
+                    "La sesión de Microsoft caducó. Vuelve a iniciar sesión.".to_string(),
+                ));
+            };
+            let (new_access, new_refresh) = refresh_ms_token(client, &rt).await?;
+            // Si no rotaron refresh token, conserva el anterior.
+            let new_refresh = new_refresh.or(Some(rt));
+            match check_session_once(client, &new_access).await {
+                SessionCheck::Valid(profile) => Ok(build(profile, new_access, new_refresh, true)),
+                SessionCheck::NoGame => Err(LauncherError::Auth(
+                    "Esta cuenta de Microsoft no tiene Minecraft Java comprado.".to_string(),
+                )),
+                _ => Err(LauncherError::Auth(
+                    "La sesión premium ya no es válida. Vuelve a iniciar sesión con Microsoft.".to_string(),
+                )),
+            }
+        }
+    }
+}
+
 /// Complete authentication flow (all steps combined)
 pub async fn full_microsoft_auth(
     client: &Client,
@@ -414,18 +579,7 @@ pub async fn full_microsoft_auth(
     let profile = get_minecraft_profile(client, &mc_token).await?;
 
     // Format UUID with dashes
-    let uuid = if profile.id.contains('-') {
-        profile.id
-    } else {
-        format!(
-            "{}-{}-{}-{}-{}",
-            &profile.id[..8],
-            &profile.id[8..12],
-            &profile.id[12..16],
-            &profile.id[16..20],
-            &profile.id[20..]
-        )
-    };
+    let uuid = format_uuid(&profile.id);
 
     Ok(MicrosoftAuthResult {
         username: profile.name,

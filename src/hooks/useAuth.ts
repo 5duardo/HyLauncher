@@ -6,6 +6,11 @@ import { useState, useEffect, useCallback } from "react";
 import type { Account, DeviceCodeResponse } from "../lib/types";
 import * as cmd from "../lib/tauri-commands";
 
+export interface SessionCheck {
+  status: "checking" | "ok" | "error";
+  message?: string;
+}
+
 interface AuthState {
   accounts: Account[];
   activeAccount: Account | null;
@@ -14,6 +19,8 @@ interface AuthState {
   /** Microsoft device code flow state */
   deviceCode: DeviceCodeResponse | null;
   isPolling: boolean;
+  /** Resultado por cuenta de la última verificación premium */
+  verifyStatus: Record<string, SessionCheck>;
 }
 
 export function useAuth() {
@@ -24,6 +31,7 @@ export function useAuth() {
     error: null,
     deviceCode: null,
     isPolling: false,
+    verifyStatus: {},
   });
 
   // Load accounts on mount
@@ -163,6 +171,38 @@ export function useAuth() {
     setState((s) => ({ ...s, error: null }));
   }, []);
 
+  /** Verifica la sesión premium de una cuenta (perfil + propiedad + refresh). */
+  const verifySession = useCallback(async (accountId: string) => {
+    setState((s) => ({
+      ...s,
+      verifyStatus: { ...s.verifyStatus, [accountId]: { status: "checking" } },
+    }));
+    try {
+      const res = await cmd.verifyPremiumSession(accountId);
+      await loadAccounts();
+      setState((s) => ({
+        ...s,
+        verifyStatus: {
+          ...s.verifyStatus,
+          [accountId]: {
+            status: "ok",
+            message: res.refreshed ? "renewed" : "valid",
+          },
+        },
+      }));
+      return res;
+    } catch (err) {
+      setState((s) => ({
+        ...s,
+        verifyStatus: {
+          ...s.verifyStatus,
+          [accountId]: { status: "error", message: String(err) },
+        },
+      }));
+      return null;
+    }
+  }, [loadAccounts]);
+
   const logout = useCallback(async () => {
     if (state.activeAccount) {
       await removeAccount(state.activeAccount.id);
@@ -171,6 +211,7 @@ export function useAuth() {
 
   return {
     ...state,
+    verifySession,
     loginOffline,
     startMicrosoftLogin,
     cancelMicrosoftLogin,

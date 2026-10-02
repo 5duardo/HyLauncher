@@ -51,6 +51,8 @@ interface SettingsPanelProps {
   onLogout: () => void;
   onSelectAccount: (id: string) => void;
   onRemoveAccount: (id: string) => void;
+  onVerifyAccount: (id: string) => void;
+  verifyStatus: Record<string, { status: "checking" | "ok" | "error"; message?: string }>;
 }
 
 type SettingsTab =
@@ -474,7 +476,7 @@ function AboutSettingsSection({
         <h3>HyLauncher</h3>
         <p>{t("settings.about.tagline")}</p>
         <span className="settings-about-version">
-          v{version} · Minecraft 1.20.1 · Fabric
+          v{version} · Minecraft 1.21.11 · Fabric
         </span>
       </div>
 
@@ -699,6 +701,8 @@ export function SettingsPanel({
   onLogout,
   onSelectAccount,
   onRemoveAccount,
+  onVerifyAccount,
+  verifyStatus,
 }: SettingsPanelProps) {
   const { t, locale, setLocale } = useI18n();
   const [settings, setSettings] = useState<LauncherSettings>({
@@ -1132,6 +1136,34 @@ export function SettingsPanel({
                                 </span>
                               </div>
                               <div className="settings-account-actions">
+                                {acc.mode === "premium" && (
+                                  <button
+                                    type="button"
+                                    className="btn btn--ghost btn--sm"
+                                    onClick={() => onVerifyAccount(acc.id)}
+                                    disabled={verifyStatus[acc.id]?.status === "checking"}
+                                    title={t("settings.account.verifyHint")}
+                                  >
+                                    {verifyStatus[acc.id]?.status === "checking" ? (
+                                      <>
+                                        <span className="spinner" />
+                                        <span>{t("settings.account.verifying")}</span>
+                                      </>
+                                    ) : verifyStatus[acc.id]?.status === "ok" ? (
+                                      <span>
+                                        {verifyStatus[acc.id]?.message === "renewed"
+                                          ? t("settings.account.renewed")
+                                          : t("settings.account.valid")}
+                                      </span>
+                                    ) : verifyStatus[acc.id]?.status === "error" ? (
+                                      <span title={verifyStatus[acc.id]?.message}>
+                                        {t("settings.account.invalid")}
+                                      </span>
+                                    ) : (
+                                      <span>{t("settings.account.verify")}</span>
+                                    )}
+                                  </button>
+                                )}
                                 {!isActive && (
                                   <button
                                     type="button"

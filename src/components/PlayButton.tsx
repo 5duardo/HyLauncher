@@ -34,7 +34,7 @@ export function PlayButton({
     },
     needs_install: { label: t("btn.installPlay"), showSpinner: false, className: "" },
     needs_update: {
-      label: t("btn.installMods"),
+      label: t("btn.installPlay"),
       showSpinner: false,
       className: "play-button--warning",
     },

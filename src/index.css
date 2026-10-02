@@ -1211,6 +1211,37 @@ svg[stroke="currentColor"],
   color: var(--color-error);
 }
 
+/* Barra de contexto: deja claro de qué pack es el listado (mods/texturas/shaders) */
+.pack-context-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(172, 84, 246, 0.08);
+  border: 1px solid var(--color-border-accent);
+  color: var(--color-text-accent);
+}
+.pack-context-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pack-context-pending {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--color-warning);
+}
+
 /* ---------- Utilities ---------- */
 .visually-hidden {
   position: absolute;
@@ -2370,7 +2401,7 @@ svg[stroke="currentColor"],
 
 .hy-meta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
 }
 
@@ -3865,4 +3896,136 @@ button.hy-meta-item:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.16);
+}
+
+/* ---- Modpacks (selección de pack) ---- */
+.packs-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.packs-search {
+  display: flex;
+}
+
+.packs-search-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.packs-search-input:focus {
+  border-color: rgba(172, 84, 246, 0.5);
+}
+
+.packs-hint {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  padding: 24px 8px;
+  text-align: center;
+}
+
+.packs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.pack-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #1a1824 0%, #15131c 100%);
+}
+
+.pack-card--active {
+  border-color: rgba(172, 84, 246, 0.55);
+  box-shadow: 0 0 0 1px rgba(172, 84, 246, 0.25);
+}
+
+.pack-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pack-card-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(172, 84, 246, 0.12);
+  color: var(--color-text-accent);
+  overflow: hidden;
+}
+
+.pack-card-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pack-card-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.pack-card-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pack-card-id {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.pack-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7ee2a8;
+  white-space: nowrap;
+}
+
+.pack-card-desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pack-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pack-card-btn {
+  margin-top: auto;
+  align-self: flex-start;
 }

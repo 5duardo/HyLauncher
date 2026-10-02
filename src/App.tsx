@@ -9,6 +9,7 @@ import {
   FaWindowRestore,
   FaTimes,
   FaGamepad,
+  FaBoxes,
   FaCube,
   FaLayerGroup,
   FaMagic,
@@ -24,6 +25,8 @@ import { SplashScreen } from "./components/SplashScreen";
 import { StatusBanner } from "./components/StatusBanner";
 import { useAuth } from "./hooks/useAuth";
 import { useModpack } from "./hooks/useModpack";
+import { useModpacks } from "./hooks/useModpacks";
+import { ModpacksPanel } from "./components/ModpacksPanel";
 import { useLaunch } from "./hooks/useLaunch";
 import { useProjectIcons } from "./hooks/useProjectIcons";
 import { useI18n } from "./lib/i18n";
@@ -42,17 +45,34 @@ function loadViewMode(): CatalogViewMode {
   return "list";
 }
 
+// Concurrencia limitada para descargas múltiples (como el backend x8,
+// aquí x6 porque cada una es un IPC Tauri).
+async function runPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
+  const queue = [...items];
+  await Promise.all(
+    Array.from({ length: Math.min(limit, queue.length) }, async () => {
+      while (queue.length) {
+        const item = queue.shift()!;
+        await fn(item);
+      }
+    })
+  );
+}
+
 export default function App() {
   const { t, locale } = useI18n();
   const auth = useAuth();
-  const modpack = useModpack();
+  const packs = useModpacks();
+  const modpack = useModpack(packs.activePackId);
   const launch = useLaunch();
   const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<"play" | "mods" | "textures" | "shaders">("play");
+  const [activeTab, setActiveTab] = useState<"play" | "modpacks" | "mods" | "textures" | "shaders">("play");
+  const [selectingPackId, setSelectingPackId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [installedTextures, setInstalledTextures] = useState<Record<string, boolean>>({});
   const [installedShaders, setInstalledShaders] = useState<Record<string, boolean>>({});
   const [optionalInstalling, setOptionalInstalling] = useState<Record<string, boolean>>({});
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [catalogView, setCatalogView] = useState<CatalogViewMode>(loadViewMode);
   const [splashDone, setSplashDone] = useState(false);
@@ -73,21 +93,62 @@ export default function App() {
     language: locale,
   });
 
-  const checkOptionalPacks = async () => {
-    if (!modpack.manifest) return;
-    
-    const texturesStatus: Record<string, boolean> = {};
-    if (modpack.manifest.optionalResourcePacks) {
-      for (const rp of modpack.manifest.optionalResourcePacks) {
-        texturesStatus[rp.id] = await cmd.checkOptionalFile("resourcepack", rp.filename);
+  // Texturas = opcionales del manifest + las incluidas en el pack (resourcePacks
+  // auto-instalados, como las 76 de KEO). Sin esto la pestaña sale vacía en KEO.
+  const prettyPackName = (filename: string) =>
+    filename.replace(/\.(zip|jar)$/i, "").replace(/[_+]+/g, " ").trim() || filename;
+  const resolvePackUrl = (url: string) =>
+    url.replace("{baseUrl}", modpack.manifest?.baseUrl ?? "");
+  const autoResourcePackEntries = (modpack.manifest?.resourcePacks ?? []).map((rp) => ({
+    id: `auto:${rp.filename}`,
+    name: prettyPackName(rp.filename),
+    description: t("textures.included"),
+    filename: rp.filename,
+    url: resolvePackUrl(rp.url),
+    sha1: rp.sha1,
+    size: 0,
+  }));
+  const allResourcePacks = [
+    ...(modpack.manifest?.optionalResourcePacks ?? []),
+    ...autoResourcePackEntries,
+  ];
+
+  // Pendiente total del pack: mods + configs + texturas + shaders incluidos.
+  // Jugar exige tener TODO el contenido, no solo los mods.
+  const pendingContentCount =
+    (modpack.updateDiff?.modsToDownload.length ?? 0) +
+    (modpack.updateDiff?.configsToUpdate.length ?? 0) +
+    (modpack.updateDiff?.resourcePacksToUpdate ?? 0) +
+    (modpack.updateDiff?.shaderPacksToUpdate ?? 0);
+  const hasPendingContent = pendingContentCount > 0;
+  const activePackSummary = packs.packs.find((p) => p.id === packs.activePackId) ?? null;
+  const packLabel = modpack.manifest
+    ? {
+        name: modpack.manifest.packName,
+        version: modpack.manifest.packVersion,
+        mc: modpack.manifest.minecraft,
       }
+    : activePackSummary
+      ? {
+          name: activePackSummary.name,
+          version: activePackSummary.packVersion ?? "?",
+          mc: activePackSummary.minecraft,
+        }
+      : null;
+
+  const checkOptionalPacks = async () => {
+    if (!modpack.manifest || !packs.activePackId) return;
+
+    const texturesStatus: Record<string, boolean> = {};
+    for (const rp of allResourcePacks) {
+      texturesStatus[rp.id] = await cmd.checkOptionalFile("resourcepack", rp.filename, packs.activePackId);
     }
     setInstalledTextures(texturesStatus);
 
     const shadersStatus: Record<string, boolean> = {};
     if (modpack.manifest.optionalShaderPacks) {
       for (const sp of modpack.manifest.optionalShaderPacks) {
-        shadersStatus[sp.id] = await cmd.checkOptionalFile("shaderpack", sp.filename);
+        shadersStatus[sp.id] = await cmd.checkOptionalFile("shaderpack", sp.filename, packs.activePackId);
       }
     }
     setInstalledShaders(shadersStatus);
@@ -97,9 +158,100 @@ export default function App() {
     checkOptionalPacks();
   }, [modpack.manifest, activeTab]);
 
+  // Descarga TODOS los pendientes de la pestaña (texturas o shaders),
+  // en paralelo (6) como el backend. Sigue con los demás si uno falla.
+  const handleInstallAllOptional = async (type: "resourcepack" | "shaderpack") => {
+    const list =
+      type === "resourcepack"
+        ? allResourcePacks
+        : (modpack.manifest?.optionalShaderPacks ?? []);
+    const installed = type === "resourcepack" ? installedTextures : installedShaders;
+    const missing = list.filter((x) => !installed[x.id]);
+    if (missing.length === 0 || !packs.activePackId) return;
+
+    launch.setLauncherState("downloading");
+    try {
+      await runPool(missing, 6, async (item) => {
+        setOptionalInstalling((prev) => ({ ...prev, [item.id]: true }));
+        try {
+          await cmd.downloadOptionalFile(resolvePackUrl(item.url), type, item.filename, item.sha1, packs.activePackId ?? undefined);
+        } catch (e) {
+          console.error(`Optional ${item.filename}:`, e);
+        } finally {
+          setOptionalInstalling((prev) => ({ ...prev, [item.id]: false }));
+        }
+      });
+      await checkOptionalPacks();
+      launch.setLauncherState("ready");
+    } catch (e) {
+      console.error(e);
+      launch.setLauncherState("error");
+    }
+  };
+
+  // Baja los opcionales que falten en disco (texturas + shaders), sin
+  // abortar si uno falla (p. ej. binarios del release aún no subidos).
+  const syncMissingOptionals = async () => {
+    if (!packs.activePackId) return;
+    const jobs: { type: "resourcepack" | "shaderpack"; id: string; filename: string; url: string; sha1: string }[] = [];
+    for (const rp of allResourcePacks) {
+      if (!(await cmd.checkOptionalFile("resourcepack", rp.filename, packs.activePackId))) {
+        jobs.push({ type: "resourcepack", id: rp.id, filename: rp.filename, url: rp.url, sha1: rp.sha1 });
+      }
+    }
+    for (const sp of modpack.manifest?.optionalShaderPacks ?? []) {
+      if (!(await cmd.checkOptionalFile("shaderpack", sp.filename, packs.activePackId))) {
+        jobs.push({ type: "shaderpack", id: sp.id, filename: sp.filename, url: sp.url, sha1: sp.sha1 });
+      }
+    }
+    if (jobs.length === 0) {
+      await checkOptionalPacks();
+      return;
+    }
+    launch.setLauncherState("downloading");
+    await runPool(jobs, 6, async (job) => {
+      setOptionalInstalling((prev) => ({ ...prev, [job.id]: true }));
+      try {
+        await cmd.downloadOptionalFile(resolvePackUrl(job.url), job.type, job.filename, job.sha1, packs.activePackId ?? undefined);
+      } catch (e) {
+        console.error(`Optional ${job.filename}:`, e);
+      } finally {
+        setOptionalInstalling((prev) => ({ ...prev, [job.id]: false }));
+      }
+    });
+    await checkOptionalPacks();
+    launch.setLauncherState("ready");
+  };
+
+  // Cuenta lo que sigue faltando en disco: diff requerido + opcionales.
+  // OJO: Jugar exige que esto sea 0 (todo: mods, texturas y shaders).
+  const countMissingContent = async (): Promise<number> => {
+    const packId = packs.activePackId;
+    if (!packId) return 0;
+    const d = await modpack.checkForUpdates();
+    let n =
+      (d?.modsToDownload.length ?? 0) +
+      (d?.configsToUpdate.length ?? 0) +
+      (d?.resourcePacksToUpdate ?? 0) +
+      (d?.shaderPacksToUpdate ?? 0);
+    const tex = await Promise.all(
+      allResourcePacks.map((rp) =>
+        cmd.checkOptionalFile("resourcepack", rp.filename, packId).catch(() => false)
+      )
+    );
+    n += tex.filter((ok) => !ok).length;
+    const sh = await Promise.all(
+      (modpack.manifest?.optionalShaderPacks ?? []).map((sp) =>
+        cmd.checkOptionalFile("shaderpack", sp.filename, packId).catch(() => false)
+      )
+    );
+    n += sh.filter((ok) => !ok).length;
+    return n;
+  };
+
   const handleToggleOptional = async (id: string, type: "resourcepack" | "shaderpack") => {
-    const list = type === "resourcepack" 
-      ? modpack.manifest?.optionalResourcePacks 
+    const list = type === "resourcepack"
+      ? allResourcePacks
       : modpack.manifest?.optionalShaderPacks;
     
     const item = list?.find(x => x.id === id);
@@ -112,9 +264,9 @@ export default function App() {
 
     try {
       if (isInstalled) {
-        await cmd.deleteOptionalFile(type, item.filename);
+        await cmd.deleteOptionalFile(type, item.filename, packs.activePackId ?? undefined);
       } else {
-        await cmd.downloadOptionalFile(item.url, type, item.filename, item.sha1);
+        await cmd.downloadOptionalFile(resolvePackUrl(item.url), type, item.filename, item.sha1, packs.activePackId ?? undefined);
       }
       await checkOptionalPacks();
       launch.setLauncherState("ready");
@@ -126,19 +278,31 @@ export default function App() {
     }
   };
 
-  // On mount: check for updates and setup state
+  // Setup + update check, siempre ligados al modpack elegido.
+  // Sin pack seleccionado no se instala ni se consulta nada.
   useEffect(() => {
+    if (packs.isLoading || !packs.activePackId) return;
     if (!auth.isLoading && auth.activeAccount) {
-      launch.fullSetup().then(() => {
+      launch.fullSetup(packs.activePackId).then(() => {
         modpack.checkForUpdates();
       });
+    } else if (!auth.isLoading) {
+      modpack.checkForUpdates();
     }
-  }, [auth.isLoading, auth.activeAccount?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packs.isLoading, packs.activePackId, auth.isLoading, auth.activeAccount?.id]);
 
-  // Load manifest and check updates on launcher startup
-  useEffect(() => {
-    modpack.checkForUpdates();
-  }, []);
+  const handleSelectPack = async (id: string) => {
+    setSelectingPackId(id);
+    try {
+      const pack = await packs.selectPack(id);
+      if (pack) {
+        setActiveTab("play");
+      }
+    } finally {
+      setSelectingPackId(null);
+    }
+  };
 
   useEffect(() => {
     if (
@@ -149,33 +313,63 @@ export default function App() {
     }
   }, [launch.launcherState]);
 
+  const isBusyState = (s: string) =>
+    s === "checking" ||
+    s === "downloading" ||
+    s === "installing" ||
+    s === "verifying" ||
+    s === "launching" ||
+    s === "running";
+
+  // Botón único: deja el pack COMPLETO (Minecraft + mods, texturas y
+  // shaders) y lanza. Si no hay nada instalado, aquí se descarga todo.
   const handlePlay = async () => {
     if (!auth.activeAccount) return;
-
-    const missingMods = modpack.updateDiff?.modsToDownload.length ?? 0;
-    if (missingMods > 0 || launch.launcherState === "needs_update") {
-      setActiveTab("mods");
+    if (!packs.activePackId) {
+      setActiveTab("modpacks");
       return;
     }
+    if (isBusyState(launch.launcherState)) return;
 
-    if (
-      launch.launcherState === "error" ||
-      launch.launcherState === "idle" ||
-      launch.launcherState === "needs_install"
-    ) {
-      await launch.fullSetup();
+    setVerifyError(null);
+    try {
+      // 1. Minecraft + Fabric + Java del pack.
+      await launch.fullSetup(packs.activePackId);
+      if (!(await cmd.isMinecraftInstalled(packs.activePackId))) return;
+
+      // 2. Contenido requerido pendiente (mods, configs, packs incluidos).
       const diff = await modpack.checkForUpdates();
-      if ((diff?.modsToDownload.length ?? 0) > 0) {
-        setActiveTab("mods");
+      const pending =
+        (diff?.modsToDownload.length ?? 0) +
+        (diff?.configsToUpdate.length ?? 0) +
+        (diff?.resourcePacksToUpdate ?? 0) +
+        (diff?.shaderPacksToUpdate ?? 0);
+      if (pending > 0) {
+        launch.setLauncherState("downloading");
+        modpack.clearError();
+        await modpack.executeUpdate();
+      }
+
+      // 2b. Texturas/shaders opcionales que falten: Jugar = pack completo.
+      await syncMissingOptionals();
+
+      // 3. Verificación estricta: si falta ALGO (mods, texturas o shaders),
+      // NO se lanza. El banner dice cuántos y dónde completarlos.
+      const missing = await countMissingContent();
+      if (missing > 0) {
+        setVerifyError(t("play.incomplete", { count: missing }));
+        launch.setLauncherState("needs_update");
         return;
       }
-      await launch.launch();
-    } else if (launch.launcherState === "ready") {
-      await launch.launch();
+
+      // 4. Jugar.
+      await launch.launch(packs.activePackId);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const error = auth.error || modpack.error || launch.error;
+  const error = auth.error || packs.error || modpack.error || launch.error || verifyError;
   const showProgress =
     launch.launcherState === "downloading" ||
     launch.launcherState === "installing" ||
@@ -184,9 +378,8 @@ export default function App() {
   const mods = modpack.manifest?.mods ?? [];
   const { icons: modIcons } = useProjectIcons(mods);
 
-  const optionalResourcePacks = modpack.manifest?.optionalResourcePacks ?? [];
-  const { icons: textureIcons } = useProjectIcons(optionalResourcePacks);
-  const filteredResourcePacks = optionalResourcePacks.filter((rp) =>
+  const { icons: textureIcons } = useProjectIcons(allResourcePacks);
+  const filteredResourcePacks = allResourcePacks.filter((rp) =>
     rp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     rp.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -204,6 +397,7 @@ export default function App() {
   );
 
   const formatSize = (bytes: number) => {
+    if (!bytes || bytes <= 0) return "—";
     if (bytes >= 1024 * 1024) {
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
@@ -216,14 +410,22 @@ export default function App() {
   };
 
   const handleInstallMods = async () => {
+    const firstInstall = modpack.updateDiff?.isFullInstall ?? false;
     launch.setLauncherState("downloading");
     modpack.clearError();
+    setVerifyError(null);
     try {
       await modpack.executeUpdate();
+      if (firstInstall) {
+        await syncMissingOptionals();
+      }
       const diff = await modpack.checkForUpdates();
-      launch.setLauncherState(
-        (diff?.modsToDownload.length ?? 0) > 0 ? "needs_update" : "ready"
-      );
+      const pending =
+        (diff?.modsToDownload.length ?? 0) +
+        (diff?.configsToUpdate.length ?? 0) +
+        (diff?.resourcePacksToUpdate ?? 0) +
+        (diff?.shaderPacksToUpdate ?? 0);
+      launch.setLauncherState(pending > 0 ? "needs_update" : "ready");
     } catch (e) {
       console.error(e);
       launch.setLauncherState("needs_update");
@@ -259,6 +461,8 @@ export default function App() {
             ? t("running.console")
             : activeTab === "play"
             ? t("title.play")
+            : activeTab === "modpacks"
+            ? t("packs.title")
             : t("title.mods", { count: mods.length })}
         </span>
         <div className="titlebar-controls">
@@ -306,6 +510,14 @@ export default function App() {
             </button>
 
             <button
+              className={`sidebar-nav-item ${activeTab === 'modpacks' ? 'active' : ''}`}
+              onClick={() => setActiveTab('modpacks')}
+              title={t("nav.modpacks")}
+            >
+              <FaBoxes size={20} />
+            </button>
+
+            <button
               className={`sidebar-nav-item ${activeTab === 'mods' ? 'active' : ''}`}
               onClick={() => setActiveTab('mods')}
               title={t("nav.mods")}
@@ -345,14 +557,27 @@ export default function App() {
         <div className="main-content">
           {/* Header: Brand + Account */}
           <header className="header">
-            {activeTab === "play" ? (
-              <div className="lunar-welcome">
-                <span className="lunar-welcome-text">{t("welcome.back")}</span>
-                <span className="lunar-welcome-user">
-                  {auth.activeAccount?.username ?? t("welcome.player")}
-                  {auth.activeAccount && <span className="lunar-status-dot" />}
-                </span>
-              </div>
+            {activeTab === "play" || activeTab === "modpacks" ? (
+              activeTab === "modpacks" ? (
+                <div className="brand">
+                  <div className="brand-text">
+                    <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 700 }}>
+                      {t("packs.listTitle")}
+                    </h1>
+                    <span className="version" style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      {t("packs.listSubtitle", { count: packs.packs.length })}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="lunar-welcome">
+                  <span className="lunar-welcome-text">{t("welcome.back")}</span>
+                  <span className="lunar-welcome-user">
+                    {auth.activeAccount?.username ?? t("welcome.player")}
+                    {auth.activeAccount && <span className="lunar-status-dot" />}
+                  </span>
+                </div>
+              )
             ) : (
             <div className="brand">
               <div className="brand-text">
@@ -367,7 +592,7 @@ export default function App() {
                   {activeTab === "mods"
                     ? t("mods.listSubtitle", { count: mods.length })
                     : activeTab === "textures"
-                    ? t("textures.listSubtitle", { count: optionalResourcePacks.length })
+                    ? t("textures.listSubtitle", { count: allResourcePacks.length })
                     : t("shaders.listSubtitle", { count: optionalShaderPacks.length })
                   }
                 </span>
@@ -396,28 +621,48 @@ export default function App() {
                 auth.clearError();
                 modpack.clearError();
                 launch.clearError();
+                setVerifyError(null);
               }}
             />
           )}
 
-          {modpack.updateDiff &&
-            modpack.updateDiff.modsToDownload.length > 0 &&
+          {hasPendingContent &&
             !modpack.isUpdating &&
             launch.launcherState !== "downloading" && (
               <StatusBanner
                 type="info"
                 message={t("banner.update", {
-                  count: modpack.updateDiff.modsToDownload.length,
+                  count: pendingContentCount,
                 })}
               />
             )}
 
+          {!packs.isLoading && !packs.activePackId && activeTab !== "modpacks" && (
+            <StatusBanner
+              type="info"
+              message={t("banner.noPack")}
+            />
+          )}
+
           {/* Tab View Switcher */}
+          {activeTab === "modpacks" && (
+            <ModpacksPanel
+              packs={packs.packs}
+              activePackId={packs.activePackId}
+              isLoading={packs.isLoading}
+              selectingId={selectingPackId}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSelect={handleSelectPack}
+            />
+          )}
+
           {activeTab === "play" && (
             <PlayDashboard
               manifest={modpack.manifest}
               modsCount={mods.length}
               missingMods={modpack.updateDiff?.modsToDownload.length ?? 0}
+              pendingContent={pendingContentCount}
               launcherState={launch.launcherState}
               username={auth.activeAccount?.username ?? t("welcome.player")}
               showProgress={showProgress}
@@ -429,9 +674,32 @@ export default function App() {
               onPlay={handlePlay}
               onStopGame={launch.stopGame}
               onLeaveGameConsole={launch.leaveGameConsole}
-              onOpenSettings={() => setShowSettings(true)}
               onOpenMods={() => setActiveTab("mods")}
+              onOpenTextures={() => setActiveTab("textures")}
+              onOpenShaders={() => setActiveTab("shaders")}
+              texturesTotal={allResourcePacks.length}
+              texturesMissing={allResourcePacks.filter((rp) => !installedTextures[rp.id]).length}
+              shadersTotal={optionalShaderPacks.length}
+              shadersMissing={optionalShaderPacks.filter((sp) => !installedShaders[sp.id]).length}
             />
+          )}
+
+          {(activeTab === "mods" || activeTab === "textures" || activeTab === "shaders") && packLabel && (
+            <div className="pack-context-bar">
+              <FaCube size={13} />
+              <span className="pack-context-name">
+                {t("catalog.packContent", {
+                  name: packLabel.name,
+                  version: packLabel.version,
+                  mc: packLabel.mc,
+                })}
+              </span>
+              {hasPendingContent && (
+                <span className="pack-context-pending">
+                  {t("catalog.pending", { count: pendingContentCount })}
+                </span>
+              )}
+            </div>
           )}
 
           {(activeTab === "mods" || activeTab === "textures" || activeTab === "shaders") && (
@@ -461,6 +729,8 @@ export default function App() {
               installedShaders={installedShaders}
               optionalInstalling={optionalInstalling}
               onToggleOptional={handleToggleOptional}
+              onInstallAllTextures={() => handleInstallAllOptional("resourcepack")}
+              onInstallAllShaders={() => handleInstallAllOptional("shaderpack")}
             />
           )}
         </div>
@@ -475,6 +745,8 @@ export default function App() {
           onLogout={auth.logout}
           onSelectAccount={auth.selectAccount}
           onRemoveAccount={auth.removeAccount}
+          onVerifyAccount={auth.verifySession}
+          verifyStatus={auth.verifyStatus}
         />
       )}
     </div>
